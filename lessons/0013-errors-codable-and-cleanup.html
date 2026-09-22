@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="面向 Web 前端工程师的 Swift 6、SwiftUI 与 Apple 原生开发课程"><title>把 JSON 变成可信模型，并保留失败原因 · Swift Native Lab</title><link rel="stylesheet" href="../assets/course.css"><script defer src="../assets/course.js"></script></head><body><a class="skip" href="#main">跳到正文</a><header class="site-header"><a class="brand" href="../index.html">SWIFT / NATIVE LAB</a><nav class="header-links" aria-label="全站导航"><a href="../index.html#curriculum">课程</a><a href="../index.html#references">速查</a><a href="../README.md">运行指南</a></nav></header><main id="main" class="page "><div class="lesson-layout"><aside class="toc" aria-label="本课导航"><strong>LESSON 13</strong><a href="#part-1">throws 让失败路径出现在签名里</a><a href="#part-2">Codable 解决表示转换，验证解决业务边界</a><a href="#part-3">Swift 6 typed throws：只在错误集合明确时收窄</a><a href="#part-4">把清理注册在取得资源的附近</a><a href="#practice">动手练习</a><a href="#quiz">即时自测</a><a href="#sources">官方资料</a><a href="../reference/glossary.html">术语速查 ↗</a></aside><article><div class="eyebrow">Swift 基础 / 35 MIN</div><h1>把 JSON 变成可信模型，并保留失败原因</h1><p class="lede">网络能返回 JSON，并不代表数据已满足业务条件。本课把“格式能读懂”和“值可以使用”分成两个有测试的步骤。</p><p class="meta">前置：<a href="0012-classes-arc-and-capture.html">12 看见引用共享，打断闭包保留环</a></p><div class="objective"><strong>本课的一个成果</strong>区分解码失败和业务校验失败，使用 throws 与 defer 组织成功和失败路径。</div><section id="part-1"><h2>throws 让失败路径出现在签名里</h2><p>函数标注 throws 后，调用者用 try 承认它可能失败；失败可以继续抛给上层，或用 do/catch 恢复。错误必须符合 Error。<code>try?</code> 将失败压成 nil，适合明确不需要原因的情况；<code>try!</code> 宣称不会失败，若判断错误会终止运行。读取外部 JSON 时通常不应该使用 try!。Swift 6 的 typed throws 可以进一步约束错误类型，本课用一个独立校验实验说明适用边界。</p><pre><code class="language-swift">public enum PlanError: Error, Equatable {
+    case emptyTitle
+    case invalidMinutes(Int)
+}
+do {
+    let sessions = try decodePlan(data)
+    print(sessions.count)
+} catch let error as PlanError {
+    print(&quot;业务校验失败：\(error)&quot;)
+} catch {
+    print(&quot;读取格式失败：\(error)&quot;)
+}</code></pre></section>
+<section id="part-2"><h2>Codable 解决表示转换，验证解决业务边界</h2><p>Codable 组合 Encodable 与 Decodable。类型的存储属性都可编码时，编译器通常可以合成实现。JSONDecoder 从 Data 解码为确定类型，因此缺失必填字段或错误字段类型会抛错；它不会自动理解“分钟必须大于零”。本例 JSON 包含 title、minutes、isCompleted 三个键，解码后再检查标题与范围，避免形状合法却语义非法的数据流入界面。</p><pre><code class="language-swift">public func decodePlan(_ data: Data) throws -&gt; [StudySession] {
+    let sessions = try JSONDecoder().decode([StudySession].self, from: data)
+    for session in sessions {
+        guard !session.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw PlanError.emptyTitle
+        }
+        guard (1...180).contains(session.minutes) else {
+            throw PlanError.invalidMinutes(session.minutes)
+        }
+    }
+    return sessions
+}</code></pre><p>要适配不同键名可定义 CodingKeys；嵌套结构不同则写自定义解码。不要误以为给 init 参数一个默认值，合成 Decodable 就会自动在 JSON 缺字段时调用那个默认参数。</p></section>
+<section id="part-3"><h2>Swift 6 typed throws：只在错误集合明确时收窄</h2><p><code>throws(MinutesError)</code> 约定函数只能抛出 MinutesError。这个同步校验只检查分钟范围，错误集合由同一模块控制，因此调用者可以穷尽处理。<code>do</code> 中若只调用这一种 typed-throws 函数，<code>catch</code> 的 error 保留具体类型；普通 <code>throws</code> 则等价于 <code>throws(any Error)</code>。这些规则自 Swift 6.0 起可用，见 <a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0413-typed-throws.md">SE-0413</a>。</p><pre><code class="language-swift">enum MinutesError: Error { case outOfRange(Int) }
+
+func validatedMinutes(_ value: Int) throws(MinutesError) -&gt; Int {
+    guard (1...180).contains(value) else {
+        throw MinutesError.outOfRange(value)
+    }
+    return value
+}
+
+do {
+    print(try validatedMinutes(0))
+} catch {
+    // 此处 error 的类型是 MinutesError，不需要强转。
+    switch error {
+    case .outOfRange(let value): print("拒绝分钟：\(value)")
+    }
+}</code></pre><p>完整可运行示例是 <a href="../examples/PlatformRecipes/TypedThrows.swift">TypedThrows.swift</a>，依次验证 25、0、181。网络、JSON 解码和任务取消可能产生不同错误；本课 decodePlan 需要保留 DecodingError 与 PlanError，因此继续使用普通 throws。不要为了采用新语法把不同故障强行压成同一种错误。</p><pre><code class="language-shell">swift -swift-version 6 examples/PlatformRecipes/TypedThrows.swift</code></pre></section>
+<section id="part-4"><h2>把清理注册在取得资源的附近</h2><p>defer 在离开当前作用域时执行，无论通过正常返回还是抛错，多个 defer 按后注册先执行。它适合关闭文件、释放锁等同步清理；不是“稍后某个任意时间”或异步调度。本实验用 cleanup 回调让行为可以测试，不读写用户文件。编码 round trip 测试验证模型经 JSON 往返没有丢失数据；非法数据测试则验证业务规则。</p><pre><code class="language-swift">public func withCleanup&lt;Value&gt;(
+    _ operation: () throws -&gt; Value,
+    cleanup: () -&gt; Void
+) rethrows -&gt; Value {
+    defer { cleanup() }
+    return try operation()
+}</code></pre><p>rethrows 表示该函数只有在传入闭包抛错时才会抛错。这里不需要提前掌握复杂错误抽象，先理解清理不会因中途 throw 而被漏掉。</p></section><section class="lab"><h3>对应可运行实验</h3><p><a href="../examples/SwiftFoundations/Sources/FoundationCore/Persistence.swift">基础实验 13</a></p><pre><code>swift run --package-path examples/SwiftFoundations foundation-lab 13
+swift -swift-version 6 examples/PlatformRecipes/TypedThrows.swift</code></pre><p class="source-note">终端命令默认在 swift-learning 根目录执行；说明为 Xcode 操作时，跟随项目 README。</p></section><section id="practice"><h2>动手：验证三类输入：可用记录、分钟为零的合法 JSON、结构错误的 JSON。</h2><ol><li>运行第 13 课，观察清理日志、编码结果和预期的业务错误。</li><li>把演示 data 的 minutes 改成 0，沿着 try 调用找出错误如何向上冒泡；恢复合法输入。</li><li>阅读 invalidDomainData 测试，区分 PlanError 与 DecodingError。</li><li>运行 swift test --package-path examples/SwiftFoundations --filter roundTrip，再运行 --filter cleanup。</li><li>运行 TypedThrows.swift，观察有效与越界输入；临时将 throws(MinutesError) 改成 throws，阅读 catch 处的类型诊断，再恢复。</li></ol><div class="callout"><strong>验收现象</strong><p>合法记录可编码往返；minutes=0 抛 PlanError.invalidMinutes(0)；{} 解成数组时抛 DecodingError；cleanup 在成功和抛错时均执行一次。 typed throws 实验接受 25，分别拒绝 0 和 181；改为普通 throws 后需重新设计 catch 中的类型处理。</p></div><details><summary>先独立完成，再展开参考解法</summary><pre><code class="language-swift">let valid = Data(#&quot;[{&quot;title&quot;:&quot;Swift&quot;,&quot;minutes&quot;:25,&quot;isCompleted&quot;:false}]&quot;#.utf8)
+let sessions = try decodePlan(valid)
+let encoded = try encodePlan(sessions)
+#expect(try decodePlan(encoded) == sessions)
+
+let invalid = Data(#&quot;[{&quot;title&quot;:&quot;Swift&quot;,&quot;minutes&quot;:0,&quot;isCompleted&quot;:false}]&quot;#.utf8)
+#expect(throws: PlanError.invalidMinutes(0)) {
+    try decodePlan(invalid)
+}</code></pre><p>完整 decodePlan、encodePlan 与 withCleanup 都在 Persistence.swift。改变测试时保持“格式”与“业务”两个层次，不要统一 catch 后返回空数组掩盖问题。</p></details></section><section><h2>从前端迁移时，留意这些误区</h2><ul><li>JSON 解析成功不代表可信业务数据。</li><li>init 参数默认值不等于 JSON 缺字段时的默认解码规则。</li></ul></section><section id="quiz"><h2>即时自测</h2><form class="quiz" data-quiz data-answer="1" data-explanation="Decodable 形状与类型检查不自动知道业务范围；必须显式验证。"><fieldset><legend>JSONDecoder 成功解码后，minutes 就一定满足 1 到 180 的业务范围。</legend><label><input type="radio" name="answer" value="0">正确</label><label><input type="radio" name="answer" value="1">错误</label></fieldset><button type="submit">检查答案</button><p class="feedback" role="status" aria-live="polite"></p><noscript><p>脚本未启用。参考答案：错误。Decodable 形状与类型检查不自动知道业务范围；必须显式验证。</p></noscript></form></section><section><h2>合上页面，尝试回忆</h2><ul><li>try? 为什么可能让错误排查变困难？</li><li>defer 在 return 和 throw 两条路径上有何共同点？</li><li>为什么分钟校验适合 typed throws，而 decodePlan 仍保留普通 throws？</li></ul><p class="source-note">建议在次日、第 3 天与第 7 天重做练习；这是起始复习节奏，可按遗忘情况调整。答错时先定位原因，再看解法。</p></section><section id="sources" class="sources"><h2>回到一手资料</h2><p>主读：第一项。正文是原创教学示例；语言与 API 语义以这些官方资料为依据。</p><ul><li><a href="https://docs.swift.org/swift-book/documentation/the-swift-programming-language/errorhandling/">The Swift Programming Language：Error Handling</a></li><li><a href="https://developer.apple.com/documentation/foundation/encoding-and-decoding-custom-types">Apple：Encoding and Decoding Custom Types</a></li><li><a href="https://github.com/swiftlang/swift-evolution/blob/main/proposals/0413-typed-throws.md">SE-0413：Typed throws（Swift 6.0）</a></li></ul><p>跨课速查：<a href="../reference/glossary.html">术语与前端迁移</a> · <a href="../reference/swift-cheatsheet.html">Swift 语法速查</a> · <a href="../reference/concurrency-map.html">并发与版本地图</a> · <a href="../reference/swiftui-dataflow.html">SwiftUI 数据流</a> · <a href="../reference/native-checklist.html">原生工程检查表</a></p></section><section class="finish"><p>遇到不清楚的地方，直接向 Codex 提问：<strong>“第 13 课，我预测……，实际……，请帮我理解原因。”</strong></p><button data-complete="13" aria-pressed="false">我已独立完成练习</button> <button class="secondary" data-export>导出进度</button><p class="source-note">勾选只保存本浏览器的自报进度，不代表已通过能力验收；正式掌握情况写入 learning-records。</p></section><nav class="pager" aria-label="课程序列"><a href="0012-classes-arc-and-capture.html">← 看见引用共享，打断闭包保留环</a><a href="0014-testing-and-cli-milestone.html">里程碑：交付一个有行为测试的学习计划核心 →</a></nav></article></div></main><footer class="footer">为 Web 前端工程师设计 · 官方资料核对：2026-09-22 · 内容与示例可离线阅读；外部资料需联网 · 学习问题可以随时带回 Codex</footer></body></html>

@@ -1,0 +1,690 @@
+[
+  {
+    "id": 15,
+    "slug": "async-await",
+    "title": "async / await：挂起、恢复与错误",
+    "module": "Swift 6 与并发",
+    "minutes": 30,
+    "prerequisites": [
+      12,
+      14
+    ],
+    "objective": "编写并运行一个可抛错的异步函数，准确解释 await 的含义。",
+    "summary": "先利用熟悉的 JavaScript async 直觉，再修正 Swift 对任务、隔离和错误的要求。",
+    "sections": [
+      {
+        "title": "把等待建模为函数效果",
+        "html": "<p>签名中的 async 表示函数允许挂起，throws 表示它可能抛错；二者是独立能力。调用写作 try await，正常结果仍然是 String，而不是需要手动展开的 Promise。源码中的 await 标出潜在挂起点，不承诺每次都会挂起，也不创建一个新的任务。先把本课看成“一个任务按顺序执行两步”，不要急着追求并行。</p><pre><code class=\"language-swift\">let name = try await loadName()\nlet count = try await loadUnreadCount()\n// count 的调用在 name 返回后才开始。\nprint(name, count)</code></pre>"
+      },
+      {
+        "title": "挂起任务与阻塞线程",
+        "html": "<p>示例 loadName 用 Task.sleep 模拟等待：挂起时运行时可以让线程处理别的任务。若你在 async 函数里做一个长时间同步循环，那个循环仍会占用当前执行器；仅添加 async 不会自动让计算离开主 actor。Web 中一个重型同步函数同样会影响交互，但 Swift 还需要明确状态属于哪个 actor。不要以打印线程编号作为正确性依据，应该依据隔离声明与数据关系推理。</p><pre><code class=\"language-swift\">public func loadName() async throws -&gt; String {\n    // 等待可被取消，不占着线程睡眠。\n    try await Task.sleep(for: .milliseconds(2))\n    return &quot;林同学&quot;\n}</code></pre>"
+      },
+      {
+        "title": "保留错误含义",
+        "html": "<p>运行示例后，把 loadName 暂时改成抛出自己的错误，再看调用方的 do/catch。不要使用 try? 把网络故障、取消和解析失败全部变为 nil，否则界面很难给出正确反馈。入口 main() async throws 适合小实验，让意外失败直接结束命令；真实页面会区分可重试错误与用户主动离开的取消。此处时间仅用于演示等待，不是性能基准。</p><pre><code class=\"language-swift\">do {\n    print(try await loadName())\n} catch is CancellationError {\n    print(&quot;任务已取消&quot;)\n} catch {\n    print(&quot;加载失败：\\(error)&quot;)\n}</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "在 CLI 的 async 分支中先加载名字，再加载未读数，用文字标注调用顺序。",
+      "steps": [
+        "打开 Sources/ConcurrencyDemo/main.swift 的 async 分支。",
+        "按第一段代码调用两个函数，运行 async 演示。",
+        "口头解释若第一个调用抛错，第二个调用是否执行。"
+      ],
+      "expected": "依次获得 林同学 和 3；第一个调用抛错会跳过余下正常路径。",
+      "solution": "<p>解法是保留两个独立的 let，并在每个调用前写 try await。第二个语句依赖控制流到达它，而非依赖第一个结果的类型。取消 Task.sleep 会抛错，因此应进入 catch，不能把它解释为“没有名字”。</p><pre><code class=\"language-swift\">let name = try await loadName()\nlet count = try await loadUnreadCount()\nprint(&quot;顺序加载：&quot;, name, count)</code></pre>"
+    },
+    "quiz": {
+      "question": "给一个函数加上 async，就能保证它的同步计算不会占用 MainActor。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "async 允许挂起；计算在哪里执行还取决于 actor 隔离和编译配置。"
+    },
+    "retrieval": [
+      "await 是否必然挂起？是否创建新任务？",
+      "async 和 throws 各描述了什么能力？"
+    ],
+    "sources": [
+      {
+        "title": "SE-0296：Async/await",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0296-async-await.md"
+      },
+      {
+        "title": "SE-0338：非 actor async 执行语义",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0338-clarify-execution-non-actor-async.md"
+      }
+    ],
+    "lab": {
+      "label": "ConcurrencyLab · async",
+      "path": "examples/ConcurrencyLab",
+      "command": "swift run --package-path examples/ConcurrencyLab ConcurrencyDemo async"
+    },
+    "pitfalls": [
+      "把 Swift async 当作后台线程开关。",
+      "用 try? 抹掉所有失败路径。"
+    ],
+    "next": 16
+  },
+  {
+    "id": 16,
+    "slug": "structured-async-let",
+    "title": "async let：固定数量的结构化子任务",
+    "module": "Swift 6 与并发",
+    "minutes": 30,
+    "prerequisites": [
+      15
+    ],
+    "objective": "用 async let 并发加载两份独立数据并组合成一个值。",
+    "summary": "名字与未读数相互独立，可以同时开始，但其生命周期仍属于当前函数。",
+    "sections": [
+      {
+        "title": "先找依赖，再创建子任务",
+        "html": "<p>本例界面需要名字与未读数。顺序版本没有数据依赖，却要等名字完成才开始第二步。将两个声明改成 async let，会创建两个结构化子任务；在真正组合 Dashboard 时才等待结果。可以把它与 Promise.all 的“多个独立请求汇合”类比，但 Swift 还把子任务的生存范围限制在词法作用域里。不要为了看起来高级，把本来需要前一步 ID 的请求强行并发。</p><pre><code class=\"language-swift\">async let name = loadName()\nasync let count = loadUnreadCount()\n// 从此处开始需要两项值，等待并合成。\nreturn try await Dashboard(name: name, unreadCount: count)</code></pre>"
+      },
+      {
+        "title": "作用域是生命周期边界",
+        "html": "<p>async let 不会把任务偷偷留在函数之外。离开作用域时，尚未等待的子任务会被取消并等待结束；取消是合作式的，所以一个不响应取消的任务仍会拖延退出。这个约束让调用者知道 loadDashboard 返回时，其子工作已经收尾。与随手创建 Task 再丢弃句柄相比，你不必为这两项短期工作设计额外持有者。</p><pre><code class=\"language-swift\">func previewOnly() async throws -&gt; String {\n    async let name = loadName()\n    async let count = loadUnreadCount()\n    _ = try await count // 读取也可能传播子任务错误。\n    return try await name\n}</code></pre>"
+      },
+      {
+        "title": "结果顺序不等于完成顺序",
+        "html": "<p>name 和 count 哪个先完成并不影响 Dashboard 的字段含义。读取某个 async let 时会等待它并传播它的错误；“某个子任务已经失败”不代表父任务此刻自动跳进 catch。需要观察结果，错误逃出作用域后其余未完成工作才按结构收尾。测试关注返回字段和错误契约，不应断言短睡眠的精确耗时。这里的固定两项工作适合 async let；数量来自用户列表时下一课用任务组。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "在 loadDashboard 中加入第三个独立字段的练习方案，并先用现有两字段版本解释生命周期。",
+      "steps": [
+        "运行 children，查看返回的名字和未读数。",
+        "阅读 StructuredWork.swift 的 loadDashboard。",
+        "在纸上为“还要加载头像 URL”写出第三个 async let 和汇合位置，不必接公网。"
+      ],
+      "expected": "能够指出三项开始点、汇合点、函数退出时的收尾责任。",
+      "solution": "<p>头像请求如果不依赖 name/count，应与二者相邻声明；若依赖服务端返回的用户 ID，则应先等待 ID，再开始头像工作。现有可运行解答就是 loadDashboard；不要为追求并行引入不存在的数据依赖。</p><pre><code class=\"language-swift\">async let name = loadName()\nasync let count = loadUnreadCount()\nlet dashboard = try await Dashboard(name: name, unreadCount: count)\nprint(dashboard)</code></pre>"
+    },
+    "quiz": {
+      "question": "async let 的子任务会在所在作用域结束前被收束。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "结构化子任务不能逃出所属作用域；需要等待或取消并等待其完成。"
+    },
+    "retrieval": [
+      "为何 async let 比丢弃句柄的 Task 更容易推理？",
+      "什么时候不该把两个请求并发启动？"
+    ],
+    "sources": [
+      {
+        "title": "SE-0317：async let",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0317-async-let.md"
+      }
+    ],
+    "lab": {
+      "label": "ConcurrencyLab · children",
+      "path": "examples/ConcurrencyLab",
+      "command": "swift run --package-path examples/ConcurrencyLab ConcurrencyDemo children"
+    },
+    "pitfalls": [
+      "认为两个 async let 的完成顺序等于声明顺序。",
+      "认为取消子任务会立即强制终止它。"
+    ],
+    "next": 17
+  },
+  {
+    "id": 17,
+    "slug": "task-groups",
+    "title": "TaskGroup：动态并发、结果顺序与失败",
+    "module": "Swift 6 与并发",
+    "minutes": 30,
+    "prerequisites": [
+      16
+    ],
+    "objective": "实现一个按输入顺序返回结果的异步映射。",
+    "summary": "处理长度未知的列表时，将并发收集与结果排列分开。",
+    "sections": [
+      {
+        "title": "让子任务返回值",
+        "html": "<p>orderedMap 接受输入数组与 @Sendable 异步转换。每个子任务只处理一个值并返回 (原索引, 结果)，由父任务遍历任务组并修改结果数组。避免在多个子任务里捕获同一个 var results 后 append：那会把结果收集变成共享可变状态问题。任务组描述谁属于这次工作，父任务描述如何汇总，职责非常清楚。</p><pre><code class=\"language-swift\">group.addTask {\n    try Task.checkCancellation()\n    return (index, try await transform(input))\n}\n// 仅父任务收集，不让各子任务修改同一数组。\nfor try await result in group { indexed.append(result) }</code></pre>"
+      },
+      {
+        "title": "完成顺序与业务顺序",
+        "html": "<p>任务组的迭代提供已经完成的结果，并不保证与 addTask 顺序相同。列表 UI 往往要求顺序稳定，因此示例最后按索引排序，再提取数值。[3,1,2] 的平方必须是 [9,1,4]，不能因为 1 最先完成就把它摆到开头。这个例子教学上一次创建全部任务；面对成千上万张图片，应使用有限并发窗口，完成一个再补一个，避免同时发起所有请求。</p><pre><code class=\"language-swift\">return indexed\n    .sorted { $0.0 &lt; $1.0 }\n    .map(\\.1) // 去掉仅用于还原顺序的索引。</code></pre>"
+      },
+      {
+        "title": "通过消费结果传播失败",
+        "html": "<p>withThrowingTaskGroup 本身并不意味着任何子任务失败都会立刻被父任务观察到。示例通过 for try await 持续消费；一旦错误从闭包逃出，剩余子任务会被取消，作用域还会等待它们收尾。groupErrorCancelsAndJoinsSibling 测试先确保兄弟任务已经开始，再让另一任务失败，因此验证了真实生命周期。若产品允许部分成功，应显式让子任务返回 Result 并制定汇总策略，不要把错误吞成空数组。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "给 orderedMap 输入 [4,2,3]，验证输出与输入对应；再运行任务组取消测试。",
+      "steps": [
+        "在 group 演示分支把输入改成 [4,2,3]。",
+        "运行 group，确认得到 [16,4,9]。",
+        "运行 swift test --package-path examples/ConcurrencyLab --filter groupErrorCancelsAndJoinsSibling。"
+      ],
+      "expected": "正常路径输出保持输入次序；故障路径会取消并等待兄弟任务。",
+      "solution": "<p>正确实现携带索引，而不是按结果值排序。按结果排序会错误地得到 [4,9,16]，破坏输入项与结果的对应。示例 sorted 比较 $0.0 与 $1.0，正是对原始索引排序。</p><pre><code class=\"language-swift\">let values = try await orderedMap([4, 2, 3]) { value in\n    try await Task.sleep(for: .milliseconds(value))\n    return value * value\n}\nprint(values) // [16, 4, 9]</code></pre>"
+    },
+    "quiz": {
+      "question": "任务组按输入添加顺序逐项返回结果。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "任务组按任务完成情况提供结果；需要业务顺序时显式携带索引。"
+    },
+    "retrieval": [
+      "为何结果数组只由父任务修改？",
+      "错误从任务组闭包逃出时，兄弟任务发生什么？"
+    ],
+    "sources": [
+      {
+        "title": "SE-0304：结构化并发",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0304-structured-concurrency.md"
+      }
+    ],
+    "lab": {
+      "label": "ConcurrencyLab · group",
+      "path": "examples/ConcurrencyLab",
+      "command": "swift run --package-path examples/ConcurrencyLab ConcurrencyDemo group"
+    },
+    "pitfalls": [
+      "把 Promise.all 的数组顺序直接套给任务组迭代。",
+      "为每个大列表元素无上限创建网络请求。"
+    ],
+    "next": 18
+  },
+  {
+    "id": 18,
+    "slug": "task-cancellation",
+    "title": "Task 生命周期与合作式取消",
+    "module": "Swift 6 与并发",
+    "minutes": 30,
+    "prerequisites": [
+      17
+    ],
+    "objective": "持有 Task 句柄、发出取消信号，并验证工作主动退出。",
+    "summary": "页面消失、搜索词改变、用户点击停止都需要明确的任务所有者。",
+    "sections": [
+      {
+        "title": "Task 是有所有者的工作",
+        "html": "<p>Task { ... } 创建非结构化任务，适合把同步事件连接到异步入口，但它不是自动属于当前函数的结构化子任务。创建处可以继承 actor 上下文等信息，却不会因此自动获得父子生命周期与取消传播。保存句柄，明确谁调用 cancel、谁观察 value、何时释放持有者。丢弃句柄不会等于取消；同样，Task.detached 也不是常规 UI 加速按钮。</p><pre><code class=\"language-swift\">let task = Task { try await cancellableSum(upTo: 100_000) }\ntask.cancel() // 发出请求，不会强行终止工作。\ndo { print(try await task.value) }\ncatch is CancellationError { print(&quot;已退出&quot;) }</code></pre>"
+      },
+      {
+        "title": "让取消在合理位置生效",
+        "html": "<p>cancellableSum 的循环没有自然 I/O 等待，因此每次迭代检查取消，并间隔调用 Task.yield 让其他任务有调度机会。yield 不保证某个特定任务立即运行，也不是业务同步原语。Task.sleep 自己支持取消；一般的 await 并不自动检查取消。检查频率是性能与响应性的取舍，大数据转换可每批检查一次。这里数字上限很小，重点是控制流而非求和算法。</p><pre><code class=\"language-swift\">for value in 0..&lt;limit {\n    try Task.checkCancellation()\n    sum += value\n    if value.isMultiple(of: 100) { await Task.yield() }\n}</code></pre>"
+      },
+      {
+        "title": "取消不能代替资源收尾",
+        "html": "<p>一旦创建了流、订阅或外部请求，就需要把终止信号传给对应资源。defer 适合同步清理；withTaskCancellationHandler 的 onCancel 是同步闭包，可能与 operation 并发执行，所以不能随便共享普通可变变量。也不要把所有异常都显示为红色错误：用户主动离开页面的取消通常回到 idle。测试使用门闩先固定任务状态再取消，比“先 sleep 一会儿再 cancel”可靠。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "运行取消演示，并从测试解释为何它不会偶尔先计算完成。",
+      "steps": [
+        "运行 cancel 演示。",
+        "阅读 cancellationIsObservedByCPUWork 测试中的 Gate。",
+        "找到 task.cancel、gate.open 和 Task.checkCancellation 的先后关系。"
+      ],
+      "expected": "演示观察到 CancellationError；测试保证真正计算开始前取消信号已发出。",
+      "solution": "<p>测试先让任务进入 Gate 等待，再取消它，最后打开门闩。进入求和函数时取消标记已经设置，第一次 checkCancellation 就会抛错。Gate 只负责测试同步，不是业务线程锁，也不证明所有非结构化任务会自动取消。</p><pre><code class=\"language-swift\">await gate.waitUntilEntered()\ntask.cancel()\nawait gate.open()\n// await task.value 应抛出 CancellationError。</code></pre>"
+    },
+    "quiz": {
+      "question": "取消是协作机制，长循环需要主动检查任务的取消状态。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "cancel 发出请求；可取消 API 或主动检查才能让工作及时结束。"
+    },
+    "retrieval": [
+      "丢弃 Task 句柄与 cancel 是同一回事吗？",
+      "为何 onCancel 中共享普通 var 可能仍有数据竞争？"
+    ],
+    "sources": [
+      {
+        "title": "SE-0304：结构化并发",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0304-structured-concurrency.md"
+      }
+    ],
+    "lab": {
+      "label": "ConcurrencyLab · cancel",
+      "path": "examples/ConcurrencyLab",
+      "command": "swift run --package-path examples/ConcurrencyLab ConcurrencyDemo cancel"
+    },
+    "pitfalls": [
+      "把取消理解为杀线程。",
+      "认为每个 await 都会自动抛 CancellationError。"
+    ],
+    "next": 19
+  },
+  {
+    "id": 19,
+    "slug": "actors-reentrancy",
+    "title": "Actor：隔离状态与 await 后的不变量",
+    "module": "Swift 6 与并发",
+    "minutes": 30,
+    "prerequisites": [
+      18
+    ],
+    "objective": "用 actor 实现并发预约，并证明挂起时不会超售。",
+    "summary": "编译器能防止数据竞争，但“只剩一张票”仍需要正确的业务时序。",
+    "sections": [
+      {
+        "title": "状态与操作放进同一个边界",
+        "html": "<p>SeatInventory 保存 available，调用者通过 actor 方法预约或查询。外部调用需要 await，因为可能要进入 actor 的执行器；这不表示 actor 为自己独占一条线程。与前端模块里的普通共享变量相比，actor 把允许访问这份可变状态的边界写进类型。把所有状态机械地塞进一个巨型 actor 也不可取，应按一致性需求建立边界。</p><pre><code class=\"language-swift\">let seats = SeatInventory(capacity: 1)\nasync let first = seats.reserve { /* 异步确认 */ }\nasync let second = seats.reserve { /* 异步确认 */ }\nlet results = try await [first, second]\nprint(results.filter { $0 }.count) // 只能有一个成功。</code></pre>"
+      },
+      {
+        "title": "重入会打断检查后的假设",
+        "html": "<p>错误实现是先 guard available > 0，再 await confirm，最后 available -= 1。第一个调用挂起时，第二个调用也可能看到库存为一，于是两次都成功。没有两个线程同时写同一变量，仍然会超售：这是逻辑竞争。正确实现把检查和占位放在同一个不含 await 的片段里；在挂起前，库存已经是零，其他调用看到的状态仍满足不变量。</p><pre><code class=\"language-swift\">guard available &gt; 0 else { return false }\navailable -= 1 // 先占位，再允许重入。\ndo {\n    try await confirm()\n    try Task.checkCancellation()\n    return true\n} catch {\n    available += 1 // 失败或取消时归还占位。\n    throw error\n}</code></pre>"
+      },
+      {
+        "title": "证明范围要说清楚",
+        "html": "<p>测试把第一位预约固定在 confirm 的挂起点，此时检查剩余量为零，并断言第二位失败，然后才放行第一位。另一组测试验证确认失败或取消后库存恢复为一。这里证明的是本进程内的预约不变量。若 confirm 真的扣款，不能简单靠加回库存完成跨系统事务；需要服务端幂等键、订单状态与补偿策略。actor 也不保证调用按你发起的顺序公平排队。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "用时间线画出一个库存、两个预约的安全执行，并运行对应测试。",
+      "steps": [
+        "标出 A 检查、A 占位、A 挂起、B 检查、A 恢复五步。",
+        "运行 actor 演示。",
+        "运行 swift test --package-path examples/ConcurrencyLab --filter reservationMaintainsInvariantAcrossSuspension。"
+      ],
+      "expected": "无论哪位先获得执行机会，成功数均为一，库存为零。",
+      "solution": "<p>可行时间线：A 读到 1，立即写成 0，然后挂起；B 读到 0，直接返回 false；A 恢复并返回 true。关键不是 A 一定先执行，而是每个预约在挂起前占位。删除占位并把减库存移动到 await 后，会让门闩测试直接揭示缺陷。</p>"
+    },
+    "quiz": {
+      "question": "Actor 中的 async 方法在整个方法返回之前都不会被其他调用插入。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "actor 的异步方法允许在挂起点重入；不变量必须跨 await 保持有效。"
+    },
+    "retrieval": [
+      "数据竞争与业务逻辑竞争有什么区别？",
+      "为什么本例必须先占位再 await？"
+    ],
+    "sources": [
+      {
+        "title": "SE-0306：Actor 与重入",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0306-actors.md"
+      }
+    ],
+    "lab": {
+      "label": "ConcurrencyLab · actor",
+      "path": "examples/ConcurrencyLab",
+      "command": "swift run --package-path examples/ConcurrencyLab ConcurrencyDemo actor"
+    },
+    "pitfalls": [
+      "把 actor 当成覆盖整个 async 方法的互斥锁。",
+      "把内存状态回滚误认为完成了外部支付回滚。"
+    ],
+    "next": 20
+  },
+  {
+    "id": 20,
+    "slug": "sendable-sending",
+    "title": "Sendable、@Sendable 与 sending",
+    "module": "Swift 6 与并发",
+    "minutes": 30,
+    "prerequisites": [
+      19
+    ],
+    "objective": "用不可变快照跨隔离传值，并区分可共享类型与一次安全转移。",
+    "summary": "Swift 6 的诊断是在询问数据由谁持有、谁还能改它，而非要求你到处加关键字。",
+    "sections": [
+      {
+        "title": "Sendable 描述跨隔离使用的安全性",
+        "html": "<p>ReadingSnapshot 是字段均可安全传递的值类型，显式声明 Sendable 让边界易读。值类型并非自动安全：struct 若装着一个共享可变 class，仍须检查它的成员。actor 引用可以传递，因为它把内部可变状态留在隔离边界里。不要把 Sendable 翻译成“只读”：一个局部结构体仍可修改自己的副本；真正要避免的是跨任务同时访问同一份未受保护状态。</p><pre><code class=\"language-swift\">struct ReadingSnapshot: Sendable {\n    let title: String\n    let minutes: Int\n}\nlet snapshot = ReadingSnapshot(title: &quot;Swift&quot;, minutes: 25)</code></pre>"
+      },
+      {
+        "title": "@Sendable 检查闭包捕获",
+        "html": "<p>@Sendable 标注函数值可安全跨并发边界使用。示例格式化闭包捕获 let suffix，它是可传递的 String；若捕获外部 var 并修改，编译器就有理由拒绝。@Sendable 不会自动把闭包派发到后台，也不等于 @MainActor。遇到诊断，先改成参数、值快照或 actor 操作；@unchecked Sendable 是你承担证明义务的承诺，不能充当绕过编译器的默认答案。</p><pre><code class=\"language-swift\">let suffix = &quot;分钟&quot;\nlet text = describe(snapshot) { item in\n    &quot;\\(item.title) · \\(item.minutes)\\(suffix)&quot;\n}\nprint(text)</code></pre>"
+      },
+      {
+        "title": "sending 是交接，不是通行证",
+        "html": "<p>Swift 6.0 的 sending 可以表达：这个非 Sendable 值在边界处与原隔离区断开，可安全交给新持有者。Draft 是可变 class，DraftInbox.accept 接收 sending Draft 后保存它；调用方不再访问已交接的引用。若原位置还保留可访问别名，编译器会分析潜在冲突。这个概念接近转移所有权，但不必把 Swift 所有引用都想成 Rust 的唯一所有权。6.2 的调用者隔离是另一项演进，不要与 sending 混为一谈。</p><pre><code class=\"language-swift\">let inbox = DraftInbox()\nlet draft = Draft(title: &quot;交接完成&quot;)\nawait inbox.accept(draft)\n// 后面只通过 inbox 读取；不再触碰 draft。\nprint(await inbox.title() ?? &quot;&quot;)</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "运行 sendable 演示，然后比较“传快照”与“交接 Draft”的调用者权限。",
+      "steps": [
+        "阅读 StructuredWork.swift 的 ReadingSnapshot、Draft 和 DraftInbox。",
+        "运行 sendable。",
+        "在草稿纸写出为何交接后继续修改 draft.title 会破坏证明。"
+      ],
+      "expected": "快照可以安全传值；Draft 被交接后原隔离区不再使用它。",
+      "solution": "<p>若 UI 只需显示标题，传 ReadingSnapshot 最清楚；若一个新建草稿要整体交给 actor 持有，sending 可以避免伪造 Sendable 一致性。原引用继续写 title 会和 actor 读取同一对象冲突，因此不是“编译器太严格”，而是所有权设计还不完整。</p>"
+    },
+    "quiz": {
+      "question": "跨 actor 传递的值，应满足该传递方式要求的并发安全约束。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "Sendable 表达可安全跨隔离边界的契约，sending 则可表达满足分析条件的一次性转移。"
+    },
+    "retrieval": [
+      "Sendable 与 sending 的证明范围有何不同？",
+      "结构体为什么不一定适合跨隔离传递？"
+    ],
+    "sources": [
+      {
+        "title": "SE-0302：Sendable 与 @Sendable",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0302-concurrent-value-and-concurrent-closures.md"
+      },
+      {
+        "title": "SE-0430：sending（Swift 6.0）",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0430-transferring-parameters-and-results.md"
+      }
+    ],
+    "lab": {
+      "label": "ConcurrencyLab · sendable",
+      "path": "examples/ConcurrencyLab",
+      "command": "swift run --package-path examples/ConcurrencyLab ConcurrencyDemo sendable"
+    },
+    "pitfalls": [
+      "看到并发错误就添加 @unchecked Sendable。",
+      "认为 let class 引用意味着对象所有属性不可变。"
+    ],
+    "next": 21
+  },
+  {
+    "id": 21,
+    "slug": "main-actor",
+    "title": "MainActor：UI 状态、重入与默认隔离",
+    "module": "Swift 6 与并发",
+    "minutes": 30,
+    "prerequisites": [
+      20
+    ],
+    "objective": "把界面状态显式隔离到 MainActor，并避免旧请求覆盖新结果。",
+    "summary": "主 actor 约束状态访问；请求先后与页面生命周期仍由你建模。",
+    "sections": [
+      {
+        "title": "先显式声明 UI 边界",
+        "html": "<p>ProfileScreenModel 用 @MainActor 标注整个类型，phase、revision 与 load 的访问保持在主 actor。即使 fetch 在别处等待，方法恢复后仍在声明的 actor 上更新状态。这里不引入 SwiftUI Observation，先学习并发契约；后续再决定如何让 View 观察 phase。不要把 DispatchQueue.main.async 当成每个状态赋值旁的补丁，类型级隔离更容易被编译器检查。</p><pre><code class=\"language-swift\">@MainActor\nfinal class ProfileScreenModel {\n    enum Phase { case idle, loading, loaded(ReaderProfile), failed(String) }\n    private(set) var phase: Phase = .idle\n    private var revision: UInt = 0\n}</code></pre>"
+      },
+      {
+        "title": "主 actor 也会重入",
+        "html": "<p>同一个页面可能先请求 A，再请求 B。A 挂起时 B 开始并先返回；若 A 后返回直接写 phase，用户会看到过时信息。示例每次 load 递增 revision，开始时保存本次值，在 await 后确认仍等于当前值才发布。取消可以减少无用工作，版本号保护仍然必要，因为旧服务不一定响应取消。测试使用门闩让旧请求最后完成，明确验证新结果保持不变。</p><pre><code class=\"language-swift\">revision &amp;+= 1\nlet requestRevision = revision\nphase = .loading\nlet profile = try await fetch()\ntry Task.checkCancellation()\nguard revision == requestRevision else { return }\nphase = .loaded(profile)</code></pre>"
+      },
+      {
+        "title": "不要猜 Xcode 的默认值",
+        "html": "<p>本包使用 swift-tools-version 6.0 和 .v6，未配置默认 MainActor，也未打开 upcoming flags，因此需要显式 @MainActor。Swift 6.2 起，工具链支持为 target 设置默认 actor 隔离；SwiftPM 的 .defaultIsolation(MainActor.self) 需要 6.2 的 manifest API。它与 Swift 6 语言模式是不同维度。查看你真实项目的 Build Settings，不能因为安装了新 Xcode 就假设所有方法都自动属于主 actor。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "运行 mainactor 演示，并分析旧请求测试的最终 phase。",
+      "steps": [
+        "阅读 Networking.swift 的 ProfileScreenModel.load。",
+        "运行 mainactor，确认 loaded 状态。",
+        "运行 swift test --package-path examples/ConcurrencyLab --filter olderResponseCannotReplaceNewerScreen。"
+      ],
+      "expected": "最后保持 id 为 2 的新结果，即使 id 为 1 的旧结果最后返回。",
+      "solution": "<p>版本号必须在 await 之前捕获，且成功、取消、失败三个分支都应验证版本。只保护成功分支仍可能让旧请求的失败信息覆盖新页面。当前实现已覆盖这三条写入路径。</p>"
+    },
+    "quiz": {
+      "question": "界面模型加上 @MainActor 后，旧请求就不可能覆盖新请求的结果。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "MainActor 防止未隔离的并发访问；请求先后产生的逻辑竞争仍需版本号等策略。"
+    },
+    "retrieval": [
+      "MainActor 隔离与请求版本号分别解决什么问题？",
+      "本课程默认隔离设置与 Swift 语言模式是什么？"
+    ],
+    "sources": [
+      {
+        "title": "SE-0316：Global Actors",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0316-global-actors.md"
+      },
+      {
+        "title": "SE-0466：默认 actor 隔离（Swift 6.2）",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0466-control-default-actor-isolation.md"
+      }
+    ],
+    "lab": {
+      "label": "ConcurrencyLab · mainactor",
+      "path": "examples/ConcurrencyLab",
+      "command": "swift run --package-path examples/ConcurrencyLab ConcurrencyDemo mainactor"
+    },
+    "pitfalls": [
+      "认为 MainActor 会自动处理请求竞态。",
+      "把 Swift 6 语言模式和默认 MainActor 设置当作同一个开关。"
+    ],
+    "next": 22
+  },
+  {
+    "id": 22,
+    "slug": "networking-fixtures",
+    "title": "URLSession：HTTP 校验与可测试的数据边界",
+    "module": "Swift 6 与并发",
+    "minutes": 30,
+    "prerequisites": [
+      21
+    ],
+    "objective": "通过可注入 transport 加载、校验并解码一个网络模型。",
+    "summary": "把网络传输、HTTP 语义与 JSON 结构区分开，才能为原生页面提供可靠状态。",
+    "sections": [
+      {
+        "title": "给 I/O 一个窄接口",
+        "html": "<p>HTTPTransport 只负责根据 URLRequest 返回 Data 与 URLResponse。LiveTransport 调用 URLSession.data(for:)；FixtureTransport 返回内存中的固定响应。ProfileClient 不关心数据是否来自公网，所以同一条状态码校验和 Codable 解码路径可离线运行。协议不是为了给每个类型套一层抽象，而是隔开变化大、速度慢、难确定的 I/O 边界。</p><pre><code class=\"language-swift\">public protocol HTTPTransport: Sendable {\n    func data(for request: URLRequest) async throws -&gt; (Data, URLResponse)\n}\n// 真正联网的实现；默认 CLI 刻意使用 fixture。\nreturn try await session.data(for: request)</code></pre>"
+      },
+      {
+        "title": "成功接收字节还不等于业务成功",
+        "html": "<p>URLSession 可以成功返回一个 HTTP 503 响应，因此必须先确认 HTTPURLResponse，再检查接受的状态码，之后才能解码。这里的教学接口接受 200..<300，并要求响应体包含完整 ReaderProfile；204 若没有正文，仍会得到 DecodingError。这是接口契约，需要与你的服务端约定一致。保持 HTTPError 与 DecodingError 区别，UI 才能决定重试或报告数据格式问题。</p><pre><code class=\"language-swift\">guard let response = response as? HTTPURLResponse else {\n    throw HTTPError.nonHTTPResponse\n}\nguard (200..&lt;300).contains(response.statusCode) else {\n    throw HTTPError.unacceptableStatus(response.statusCode)\n}\nreturn try JSONDecoder().decode(ReaderProfile.self, from: data)</code></pre>"
+      },
+      {
+        "title": "用 fixture 检验真实边界",
+        "html": "<p>示例 URL 使用 example.invalid，但 fixture 不会请求它，避免把外网可用性混入课程验证。测试分别覆盖合法 JSON、HTTP 503、非 HTTP 响应、id 类型不符。传输层错误直接传播，取消在 I/O 前后检查，UI 再区分取消与普通故障。接真实服务时还要确认认证、缓存、超时与隐私约束；不要把令牌写在示例中，也不要为了联网成功关闭平台传输安全。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "构造状态码 503 且正文非法 JSON 的 fixture，判断首先得到哪种错误。",
+      "steps": [
+        "运行 network 演示。",
+        "阅读 fixtureDecodesAndRejectsHTTPFailure 测试。",
+        "把 JSON 中 id 从数字改成字符串，保持 HTTP 200，运行测试观察 DecodingError。"
+      ],
+      "expected": "503 优先得到 HTTPError；200 且字段类型错误得到 DecodingError。",
+      "solution": "<p>检验顺序不能反过来。先解码错误正文，可能把真正的服务端不可用误报成 JSON 问题。当前 fetch 先做状态校验，所以 503 加上 not JSON 仍稳定产生 unacceptableStatus(503)。</p><pre><code class=\"language-swift\">let client = ProfileClient(transport: FixtureTransport(json: &quot;not JSON&quot;, status: 503))\ndo { _ = try await client.fetch(from: url) }\ncatch { print(error) } // unacceptableStatus(503)</code></pre>"
+    },
+    "quiz": {
+      "question": "URLSession 请求返回后，仍需要检查 HTTP 状态与解码结果。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "传输完成不代表业务成功；HTTP 错误可能带有正常响应体。"
+    },
+    "retrieval": [
+      "传输错误、HTTP 错误与解码错误的边界在哪里？",
+      "为什么 fixture 要复用真实客户端的解码路径？"
+    ],
+    "sources": [
+      {
+        "title": "Apple：URLSession.data(for:delegate:)",
+        "url": "https://developer.apple.com/documentation/foundation/urlsession/data(for:delegate:)"
+      },
+      {
+        "title": "Apple：HTTPURLResponse.statusCode",
+        "url": "https://developer.apple.com/documentation/foundation/httpurlresponse/statuscode"
+      },
+      {
+        "title": "Apple：JSONDecoder.decode(_:from:)",
+        "url": "https://developer.apple.com/documentation/foundation/jsondecoder/decode(_:from:)"
+      }
+    ],
+    "lab": {
+      "label": "ConcurrencyLab · network",
+      "path": "examples/ConcurrencyLab",
+      "command": "swift run --package-path examples/ConcurrencyLab ConcurrencyDemo network"
+    },
+    "pitfalls": [
+      "把 HTTP 404 当成 URLSession 必然抛出的传输错误。",
+      "仅对成功 JSON 写测试。"
+    ],
+    "next": 23
+  },
+  {
+    "id": 23,
+    "slug": "async-sequence-bridging",
+    "title": "AsyncSequence 与回调桥接：结束也属于契约",
+    "module": "Swift 6 与并发",
+    "minutes": 35,
+    "prerequisites": [
+      22
+    ],
+    "objective": "消费一个可停止的事件流，并将单次回调桥接为 async。",
+    "summary": "一次结果与连续事件使用不同抽象，都必须设计完整的结束路径。",
+    "sections": [
+      {
+        "title": "连续状态用 AsyncSequence",
+        "html": "<p>AsyncStream 把多次 yield 转成 for await。ProgressFeed 的生产者每次发出进度，消费者逐项处理，等不到值时可以挂起。bufferingNewest(1) 只保留最新待消费进度，适合“当前位置”这类状态；若每条事件都是必须保存的交易，丢旧值就不合适。设置缓冲上限不是自动背压，生产者仍可继续发送，需观察 yield 结果或选用能限制生产速度的协议。</p><pre><code class=\"language-swift\">let feed = ProgressFeed(count: 3)\nfor await progress in feed.stream {\n    print(progress)\n}\nawait feed.waitUntilStopped()</code></pre>"
+      },
+      {
+        "title": "终止需要回传给生产者",
+        "html": "<p>生产者用 defer finish 告诉消费者以后没有值，onTermination 再取消生产 Task 并清理外部资源。提前 break 并不等于一个可靠、即时的取消通知，特别是你还持有 stream 或 continuation 时；本例明确提供 feed.cancel。测试检查消费者取消后生产者退出、终止回调发生，以及提前 break 后显式关闭。真实传感器或通知监听还要在同一路径注销 observer，避免页面离开后继续耗电。</p><pre><code class=\"language-swift\">for await progress in feed.stream {\n    print(progress)\n    break\n}\nfeed.cancel() // 提前退出时由所有者关闭。\nawait feed.waitUntilStopped()</code></pre>"
+      },
+      {
+        "title": "单次回调必须恰好恢复一次",
+        "html": "<p>withCheckedThrowingContinuation 适合“最终只回调一次”的旧接口。成功和失败通过 Result 合并成一个 resume(with:) 路径，避免漏掉某条分支。checked 会帮助发现重复恢复或遗漏，但不替你自动修复，更不会自动取消底层工作。本例旧 API 同步且保证恰好一次回调；若真实 API 可能永不回调、重复回调或需要取消 token，就必须另外设计同步保护与取消握手，不能照搬成生产适配器。</p><pre><code class=\"language-swift\">let title: String = try await withCheckedThrowingContinuation { continuation in\n    legacyTitle(succeeds: true) { result in\n        continuation.resume(with: result) // 一个结果、一次恢复。\n    }\n}</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "让进度流读到第一项后结束，并保证生产者也停止；再运行回调成功和失败测试。",
+      "steps": [
+        "在 stream 分支使用第二段代码提前 break。",
+        "保留 feed.cancel 和 waitUntilStopped。",
+        "运行 swift test --package-path examples/ConcurrencyLab --filter streamFinishesAndContinuationBridgesBothPaths。"
+      ],
+      "expected": "消费者退出后生产者完成；单次桥接成功返回标题，失败保持 LegacyFailure。",
+      "solution": "<p>流的 finish 可结束迭代，Task 的取消负责通知生产者。二者职责不同，完整适配通常需要两者连接。单次 continuation 的 resume 不能像 AsyncStream.yield 一样多次调用；如果旧接口实际上会重复提供进度，应改为流。</p>"
+    },
+    "quiz": {
+      "question": "withCheckedContinuation 会自动让一个永不回调的旧 API 支持取消。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "continuation 不自带底层取消；需要额外协议保证所有终止路径恰好恢复一次。"
+    },
+    "retrieval": [
+      "为什么 break 后本例还显式 cancel？",
+      "yield、finish 与 resume 的次数约束有何不同？"
+    ],
+    "sources": [
+      {
+        "title": "SE-0314：AsyncStream",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0314-async-stream.md"
+      },
+      {
+        "title": "SE-0300：Continuation",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0300-continuation.md"
+      }
+    ],
+    "lab": {
+      "label": "ConcurrencyLab · stream",
+      "path": "examples/ConcurrencyLab",
+      "command": "swift run --package-path examples/ConcurrencyLab ConcurrencyDemo stream"
+    },
+    "pitfalls": [
+      "把 AsyncStream 的缓冲上限误认为生产者背压。",
+      "对会多次回调的接口使用单次 continuation。"
+    ],
+    "next": 24
+  },
+  {
+    "id": 24,
+    "slug": "swift-six-migration",
+    "title": "Swift 6 迁移与并发里程碑",
+    "module": "Swift 6 与并发",
+    "minutes": 35,
+    "prerequisites": [
+      23
+    ],
+    "objective": "区分工具链、语言模式与隔离开关，完成一次有证据的并发验收。",
+    "summary": "本课把前九课收束成可维护工程习惯，并标清 Swift 6.0 与 6.2 之后的边界。",
+    "sections": [
+      {
+        "title": "四个版本维度分开记录",
+        "html": "<p>swift --version 显示编译器；Package.swift 第一行决定 manifest API 可用范围；swiftLanguageModes 决定源代码按哪种语言模式检查；platforms 决定部署目标。本包明确 tools 6.0、语言模式 .v6、macOS 14 / iOS 17，当前机器实际编译器为 Swift 6.4。后者不是已经用 Swift 6.0 编译器实测通过的证明。升级 Xcode 也不等于项目已启用 Swift 6 完整数据竞争检查。</p><pre><code class=\"language-swift\">// swift-tools-version: 6.0\n// Package 的末尾：\nswiftLanguageModes: [.v6]\n// 查看工具链：终端执行 swift --version</code></pre>"
+      },
+      {
+        "title": "6.2 之后的可接近并发需要看设置",
+        "html": "<p>Swift 6.2 引入可配置的默认 MainActor 隔离，以及由 NonisolatedNonsendingByDefault 控制的非隔离 async 调用者隔离语义；这是不同设置，不要合并成“Swift 6 就都在主线程”。.defaultIsolation(MainActor.self) 需要 tools 6.2。SE-0461 的 6.2 语法用 @concurrent 显式表达离开 actor 执行；更新工具链可能继续演进语法，阅读提案时区分已实施内容与修订记录。本包关闭这些 upcoming 选项，保留显式 UI 隔离，便于学习基线。</p><pre><code class=\"language-swift\">// 仅为 6.2+ 配置示意；不添加到本课程 tools 6.0 manifest。\nswiftSettings: [\n    .defaultIsolation(MainActor.self),\n    .enableUpcomingFeature(&quot;NonisolatedNonsendingByDefault&quot;)\n]</code></pre>"
+      },
+      {
+        "title": "迁移从所有权与验证开始",
+        "html": "<p>旧项目可先在 Swift 5 模式打开完整严格并发警告，再逐模块迁移。每条诊断先回答三件事：谁持有状态、谁会改它、它是否需要跨 actor。优先修正边界与快照，给兼容逃生口写清理由，而非批量加 @unchecked Sendable 或 nonisolated(unsafe)。通过编译只证明静态约束的一部分；本章的 actor 重入、旧请求覆盖与取消收尾仍依赖行为测试。课程已生成不代表你已掌握，应以独立复现这些证明作为阶段完成条件。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "完成并发里程碑：不看答案解释三个竞态，并运行整包测试与全部演示。",
+      "steps": [
+        "运行 swift --version，记录工具链；阅读 Package.swift 的三个显式基线。",
+        "运行 swift test --package-path examples/ConcurrencyLab。",
+        "运行 swift run --package-path examples/ConcurrencyLab ConcurrencyDemo all。",
+        "闭卷解释预约超售、旧请求覆盖、提前 break 泄漏生产者，并说明各自修复点。"
+      ],
+      "expected": "14 个 Swift Testing 行为测试通过；全部演示退出成功；能独立说明编译器无法自动解决的三个逻辑问题。",
+      "solution": "<p>里程碑答案：预约在 await 前占位，失败时回滚；页面在成功、失败、取消发布前都比较请求版本；流所有者提前退出时显式关闭生产者。结构化任务通过作用域管理生命周期，非结构化任务通过句柄管理。若测试失败，把实际错误和隔离关系带给老师继续分析，不要把测试绿灯写成真机 UI 已验证。</p><pre><code class=\"language-swift\">// 从工作区根目录执行：\n// swift test --package-path examples/ConcurrencyLab\n// swift run --package-path examples/ConcurrencyLab ConcurrencyDemo all</code></pre>"
+    },
+    "quiz": {
+      "question": "编译器版本、Swift 语言模式与默认隔离设置需要分别检查。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "安装 Swift6.4 不会自动证明项目启用了默认 MainActor；查看清单、build settings 和 feature flags。"
+    },
+    "retrieval": [
+      "本包四个版本维度分别是什么？",
+      "为什么数据竞争检查通过后仍需要重入与生命周期测试？"
+    ],
+    "sources": [
+      {
+        "title": "Swift 6 迁移：渐进采用",
+        "url": "https://www.swift.org/migration/documentation/swift-6-concurrency-migration-guide/incrementaladoption/"
+      },
+      {
+        "title": "Swift 6 迁移：启用数据竞争检查",
+        "url": "https://www.swift.org/migration/documentation/swift-6-concurrency-migration-guide/enabledataracesafety/"
+      },
+      {
+        "title": "SE-0461：调用者隔离与 upcoming flag（Swift 6.2）",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0461-async-function-isolation.md"
+      },
+      {
+        "title": "SE-0466：默认 actor 隔离（Swift 6.2）",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0466-control-default-actor-isolation.md"
+      }
+    ],
+    "lab": {
+      "label": "ConcurrencyLab · migration",
+      "path": "examples/ConcurrencyLab",
+      "command": "swift run --package-path examples/ConcurrencyLab ConcurrencyDemo migration"
+    },
+    "pitfalls": [
+      "按安装的 Xcode 版本猜测源代码的语言模式。",
+      "把编译成功等同于业务顺序、资源生命周期和 UI 全部正确。"
+    ],
+    "next": 25
+  }
+]

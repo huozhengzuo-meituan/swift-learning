@@ -1,0 +1,979 @@
+[
+  {
+    "id": 1,
+    "slug": "toolchain-and-packages",
+    "title": "建立可重复运行的 Swift 开发环境",
+    "module": "Swift 基础",
+    "minutes": 25,
+    "prerequisites": [],
+    "objective": "从工作区运行第一个 SwiftPM 示例，并解释编译器、语言模式、SDK 与最低系统版本。",
+    "summary": "从你熟悉的构建工具切入，把一次成功运行拆成可解释、可复现的步骤。先掌握独立于 UI 的开发循环，后续再把相同业务逻辑接入 SwiftUI。",
+    "sections": [
+      {
+        "title": "四个版本，回答四个问题",
+        "html": "<p>Swift 编译器把源码转成机器码；Swift 语言模式决定哪些语言规则生效；Apple SDK 提供系统 API 的声明与构建资源；deployment target 决定应用声明支持的最低系统。它们不能互相替代。新编译器并不意味着程序只能运行在最新系统，选择 Swift 6 模式也不会自动获得新系统才提供的框架 API。</p><p>本包使用 <code>swift-tools-version: 6.0</code>、<code>swiftLanguageModes: [.v6]</code> 和 macOS 14 基线。tools version 是包清单可用能力和最低工具链要求；本机实际编译器要用命令核实。课程准备时本机是 Swift 6.4，不能把这个本机事实当作所有读者环境的前提。</p>"
+      },
+      {
+        "title": "一个包里的三个角色",
+        "html": "<p>打开 <code>examples/SwiftFoundations/Package.swift</code>。<code>FoundationCore</code> 是可被导入的库 target，保存纯业务模型和函数；<code>FoundationLab</code> 是 executable target，负责读参数和打印；测试 target 依赖库。product 是包向使用者提供的产物。它们与 npm package、源码目录有相似职责，但 Swift 的模块可见性由访问控制限定。</p><pre><code class=\"language-swift\">// Package.swift 中的真实依赖方向\n.target(name: &quot;FoundationCore&quot;),\n.executableTarget(name: &quot;FoundationLab&quot;, dependencies: [&quot;FoundationCore&quot;]),\n.testTarget(name: &quot;FoundationCoreTests&quot;, dependencies: [&quot;FoundationCore&quot;])\n// main 文件导入的是模块名，运行时选择的是产品名。\nimport FoundationCore</code></pre>"
+      },
+      {
+        "title": "把编辑、构建、运行分开观察",
+        "html": "<p>所有课程命令都从 swift-learning 根目录执行。<code>swift build</code> 只构建，<code>swift run</code> 在需要时构建后运行，<code>swift test</code> 构建并执行测试。第一次较慢通常因为要编译依赖模块；后续增量构建较快。不要通过重建项目或升级 deployment target 来碰运气消除错误，先阅读第一条编译诊断。</p><pre><code class=\"language-shell\"># 在终端逐行执行\nxcode-select -p\nswift --version\nswift build --package-path examples/SwiftFoundations\nswift run --package-path examples/SwiftFoundations foundation-lab 1</code></pre><p>本项目无第三方包依赖，语言实验无需访问外部服务。你可以在 Xcode 打开 Package.swift 阅读与调试；iOS App 的签名、模拟器与生命周期将在原生工程部分专门学习。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "完成一次可复现运行，并做一个可逆的编译失败实验。",
+      "steps": [
+        "在终端运行本课命令，记录 swift --version 的完整输出。",
+        "打开 FoundationLab.swift，找到 case 1，将第一条 print 文本改成自己的名字，保存并再次运行。",
+        "临时删除该 print 的右括号，运行 swift build，阅读第一条错误；恢复括号后重新构建。",
+        "口头指出 Package.swift 中的工具版本、语言模式和最低系统版本各在何处。"
+      ],
+      "expected": "第 1 课输出自定义问候；恢复源码后构建通过。能解释语法错误发生在编译阶段，而不是程序运行阶段。",
+      "solution": "<p>完整运行路径如下。FoundationLab 的 <code>@main</code> 标记程序入口；此时只需找到 case 1，不必提前理解其余课程。编译失败实验恢复后，提交给老师的是命令输出和你对四种版本的解释。</p><pre><code class=\"language-shell\">swift --version\nswift build --package-path examples/SwiftFoundations\nswift run --package-path examples/SwiftFoundations foundation-lab 1\nswift test --package-path examples/SwiftFoundations</code></pre>"
+    },
+    "quiz": {
+      "question": "把 deployment target 改成 macOS 14，就会把编译器切换为 Swift 14。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "deployment target 描述系统兼容基线，与 Swift 编译器版本不是同一个维度。"
+    },
+    "retrieval": [
+      "为什么只看 Xcode 版本还不足以判断一个包使用什么 Swift 语言模式？",
+      "库 target 和 executable target 为什么要分开？"
+    ],
+    "sources": [
+      {
+        "title": "Swift.org：Build a Command-line Tool",
+        "url": "https://www.swift.org/getting-started/cli-swiftpm/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 01",
+      "path": "examples/SwiftFoundations/Package.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 1"
+    },
+    "pitfalls": [
+      "不要把 Swift 6 当成 iOS 6，也不要把 SDK 版本当成最低系统版本。",
+      "@main 入口与 main.swift 顶层入口不能在同一个可执行模块中重复使用。"
+    ],
+    "next": 2
+  },
+  {
+    "id": 2,
+    "slug": "bindings-and-types",
+    "title": "用类型表达数据：let、var 与数值转换",
+    "module": "Swift 基础",
+    "minutes": 25,
+    "prerequisites": [
+      1
+    ],
+    "objective": "编写不丢失小数的完成比例计算，并识别常量、变量和显式转换。",
+    "summary": "你熟悉 JavaScript 的值和 TypeScript 的类型；本课将它们迁移到 Swift 编译时检查，并用一个百分比错误验证差异。",
+    "sections": [
+      {
+        "title": "先说清会不会变，再说清是什么",
+        "html": "<p><code>let</code> 声明初始化后不再重新赋值的绑定，<code>var</code> 允许更新。Swift 可以从初值推断类型，但类型一旦确定，后续不能赋成其他类型。<code>var count = 2</code> 并不是动态类型；它仍是 Int。日常优先使用 let，需要变更时再改 var，这让读代码的人能缩小需要追踪的状态范围。</p><pre><code class=\"language-swift\">let completed = 2       // 推断为 Int\nvar total: Int = 4       // 显式标注相同的类型\ntotal += 1\nlet title = &quot;Swift&quot;      // String\nlet isReady = true       // Bool\n// total = &quot;5&quot;          // 取消注释会出现编译错误</code></pre>"
+      },
+      {
+        "title": "显式转换的位置就是算法的一部分",
+        "html": "<p>在 Swift 中 Int 除以 Int 的结果仍为整数。<code>Double(completed / total)</code> 看似返回 Double，但除法已经丢掉小数。应先转换操作数，再除法。不同具体数值类型通常不会自动转换；这种显式边界让精度变化可见。浮点数用于近似量，不能因类型检查通过就认为每个十进制小数都能精确表示。</p><pre><code class=\"language-swift\">public func completionRatio(completed: Int, total: Int) -&gt; Double {\n    guard total &gt; 0 else { return 0 } // 空计划约定显示 0\n    return Double(completed) / Double(total)\n}\n// completed=2, total=5 -&gt; 0.4\n// Double(2 / 5)       -&gt; 0.0</code></pre>"
+      },
+      {
+        "title": "类型可以阻止部分错误，契约仍要由你定义",
+        "html": "<p>类型系统知道 total 是整数，却不知道它表示多少个任务。本例把 total 非正数约定为零比例；这是一条显示层策略，不是所有产品都应采用的通用规则。未来若计数来自外部数据，应在输入边界验证 completed 和 total 的关系。先分清“编译失败”和“业务结果不符合需求”，能让你更准确地使用测试。</p><p>条件必须是 Bool，不能像 JavaScript 一样把 0、空字符串直接当成 false。<code>if total &gt; 0</code> 表达清楚了判定；<code>if total</code> 不合法。查阅 <a href=\"../reference/swift-cheatsheet.html\">Swift 语法速查</a> 时，同时练习说出每个表达式的类型。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "找出“完成 1 项、总共 4 项，却显示 0”这一错误的原因并修复。",
+      "steps": [
+        "运行第 2 课，先预测 2/5 的结果。",
+        "在 Basics.swift 中临时把计算改成 Double(completed / total)，运行观察结果。",
+        "恢复先转换再除法；将 FoundationLab.swift 的 case 2 输入改为 1 和 4（注意移除 total += 1）。",
+        "运行 swift test --package-path examples/SwiftFoundations --filter ratio。"
+      ],
+      "expected": "原示例输出 0.4；修改后的 1/4 示例输出 0.25；ratio 测试通过。",
+      "solution": "<p>替换函数体为下面完整实现。不要只转换整个除法表达式。演示输入的修改可以保留为自己的实验，也可恢复原来的 2 和 5。</p><pre><code class=\"language-swift\">public func completionRatio(completed: Int, total: Int) -&gt; Double {\n    guard total &gt; 0 else { return 0 }\n    return Double(completed) / Double(total)\n}</code></pre>"
+    },
+    "quiz": {
+      "question": "Double(1 / 4) 的结果是 0.25。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "1 / 4 先按整数执行，结果是 0；之后转换只会得到 0.0。"
+    },
+    "retrieval": [
+      "类型推断与动态类型有什么区别？",
+      "为什么显式转换要发生在除法之前？"
+    ],
+    "sources": [
+      {
+        "title": "The Swift Programming Language：The Basics",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/thebasics/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 02",
+      "path": "examples/SwiftFoundations/Sources/FoundationCore/Basics.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 2"
+    },
+    "pitfalls": [
+      "var 表示可变，不表示可随时更换类型。",
+      "整数除法丢掉的小数无法靠事后转换恢复。"
+    ],
+    "next": 3
+  },
+  {
+    "id": 3,
+    "slug": "strings-and-unicode",
+    "title": "按用户看到的字符处理 Unicode 文本",
+    "module": "Swift 基础",
+    "minutes": 25,
+    "prerequisites": [
+      2
+    ],
+    "objective": "生成不会截断组合 emoji 的标题预览。",
+    "summary": "原生界面会遇到中文、重音字母、emoji 和多语言输入。先明确你正在数的是字符、编码单元还是字节，才能正确处理它们。",
+    "sections": [
+      {
+        "title": "一个看得见的符号可能由多个标量组成",
+        "html": "<p>Swift 的 Character 表示扩展字素簇，接近用户感知的一个字符。String 是 Character 集合；UTF-8 和 UTF-16 是编码视图。<code>👩🏽‍💻</code> 含人物、肤色修饰和连接序列，String.count 计为一个，而 utf16.count 会更大。因此你从 Web 迁移的字符串长度直觉需要校准，不能把服务端字节限制和 UI 字数限制混为一谈。</p><pre><code class=\"language-swift\">let title = &quot;👩🏽‍💻学习Swift&quot;\nprint(title.count)        // 8 个 Character\nprint(title.utf16.count)  // 14 个 UTF-16 码元\nprint(&quot;预览：\\(title)&quot;)   // 插值，不是 ${title}</code></pre>"
+      },
+      {
+        "title": "用集合操作表达截取意图",
+        "html": "<p>String 不接受整数下标，因为定位第 n 个 Character 可能需要遍历。对“取前几个字符”的需求，直接使用 prefix，比手算编码位置更可靠。prefix 返回 Substring，短期切片可以共享原存储；要长期保存小片段时转换成 String。本例先把负数长度归零，避免把调用错误变成运行时陷阱。</p><pre><code class=\"language-swift\">public func preview(_ title: String, limit: Int) -&gt; String {\n    let limit = max(0, limit)\n    return title.count &lt;= limit\n        ? title\n        : String(title.prefix(limit)) + &quot;…&quot;\n}\n// preview(&quot;👩🏽‍💻学习Swift&quot;, limit: 3) -&gt; &quot;👩🏽‍💻学习…&quot;</code></pre>"
+      },
+      {
+        "title": "索引必须来自当前字符串",
+        "html": "<p>需要访问具体位置时，用 startIndex、index(after:) 等产生 String.Index；不要把另一个字符串的索引直接拿来用。修改字符串后，先前保存的索引也可能失效。String.count 需要识别字符边界，不应假定是常数时间；本课的小标题无需提前优化，但对大文档应避免在循环里重复计算长度。</p><p>一个优秀的 UI 截断测试应包括纯英文、中文、组合 emoji、空字符串和刚好不需要截断的边界。只测试 ASCII 会让错误隐藏到真实用户输入出现时。此处预览适合学习文本处理，真正的 SwiftUI 单行视觉省略应优先由 Text 的布局能力处理。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "验证 emoji 不被切开，然后为只取一个字符的预览写一个回归断言。",
+      "steps": [
+        "运行第 3 课，对照 Character 与 UTF-16 计数。",
+        "打开 Basics.swift 的 preview，输入 limit 为 1、3 和 8，分别预测再运行。",
+        "在 FoundationCoreTests.swift 的 unicodePreview 中补上 preview(\"👩🏽‍💻学习\", limit: 1) 的预期。",
+        "运行 swift test --package-path examples/SwiftFoundations --filter unicodePreview。"
+      ],
+      "expected": "limit=1 得到 👩🏽‍💻…；limit=3 得到 👩🏽‍💻学习…；limit=8 得到完整原字符串。",
+      "solution": "<p>本课完整实现就在 preview。断言应比较实际文本，而不是只比较长度；这样同时验证没有切碎 emoji 和省略号策略。</p><pre><code class=\"language-swift\">#expect(preview(&quot;👩🏽‍💻学习&quot;, limit: 1) == &quot;👩🏽‍💻…&quot;)\n#expect(preview(&quot;学习&quot;, limit: 2) == &quot;学习&quot;)\n#expect(preview(&quot;&quot;, limit: 1) == &quot;&quot;)</code></pre>"
+    },
+    "quiz": {
+      "question": "String.count 与 String.utf16.count 对所有文本都相等。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "前者计数 Character，后者计数编码单元；复杂字符可能占多个编码单元。"
+    },
+    "retrieval": [
+      "String 为什么不直接支持 title[2]？",
+      "将 Substring 转成 String 的一个实际理由是什么？"
+    ],
+    "sources": [
+      {
+        "title": "The Swift Programming Language：Strings and Characters",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/stringsandcharacters/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 03",
+      "path": "examples/SwiftFoundations/Sources/FoundationCore/Basics.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 3"
+    },
+    "pitfalls": [
+      "Swift 的 count 不等同于 JavaScript 的 string.length。",
+      "不要为视觉省略主动破坏原始文本；存储完整内容，展示时选择策略。"
+    ],
+    "next": 4
+  },
+  {
+    "id": 4,
+    "slug": "collections-and-control-flow",
+    "title": "选择集合并用控制流统计主题",
+    "module": "Swift 基础",
+    "minutes": 25,
+    "prerequisites": [
+      3
+    ],
+    "objective": "实现主题频次统计，并解释 Array、Set、Dictionary 的不同承诺。",
+    "summary": "数组不是所有数据的默认答案。用顺序、唯一性和查找方式选择结构，再写清楚空集合与边界条件。",
+    "sections": [
+      {
+        "title": "先问数据需要什么，再选容器",
+        "html": "<p>Array 保留顺序并允许重复；Set 保留唯一值但不保证展示顺序；Dictionary 关联键和值，也不承诺可用于 UI 的排序。Set 元素和 Dictionary 键需要 Hashable。Swift 容器通常有统一元素类型，例如 [String]、Set&lt;String&gt;、[String: Int]，无需把所有东西塞进 Any 后再猜类型。</p><pre><code class=\"language-swift\">let topics = [&quot;Swift&quot;, &quot;UI&quot;, &quot;Swift&quot;]\nlet distinct = Set(topics)        // 唯一主题有 2 个\nvar counts: [String: Int] = [:]  // 空字典仍有确定类型\nfor topic in topics {\n    counts[topic, default: 0] += 1\n}</code></pre>"
+      },
+      {
+        "title": "循环表达遍历，分支表达业务条件",
+        "html": "<p><code>for item in items</code> 直接遍历元素，避免手写下标越界。如果确实需要索引，优先用 indices 或 enumerated。<code>0..&lt;n</code> 不包含 n；<code>1...n</code> 包含 n，但 n 为 0 时不适合当作空循环。if 的条件需要 Bool；switch 每个分支默认不穿透到下一个，不需要 JavaScript 风格的每段 break。</p><pre><code class=\"language-swift\">for (index, topic) in topics.enumerated() {\n    if topic == &quot;Swift&quot; { print(&quot;\\(index): \\(topic)&quot;) }\n}\n// 空数组的 indices 是空集合，循环自然执行零次。\nfor index in topics.indices { print(topics[index]) }</code></pre>"
+      },
+      {
+        "title": "计算无序，展示有序",
+        "html": "<p>统计函数只返回字典，将展示顺序留给调用者决定。CLI 使用 sorted 按主题名排序后输出，确保重复运行结果稳定。这个分离在原生列表里很有用：模型不应偷偷依赖某次字典的内存布局，界面也不应因重启随机换顺序。数组的下标必须有效；访问不存在的位置会陷阱，不能期待得到 undefined。</p><pre><code class=\"language-swift\">for (topic, count) in topicCounts(topics).sorted(by: { $0.key &lt; $1.key }) {\n    print(&quot;\\(topic)：\\(count)&quot;)\n}\n// Swift：2\n// UI：1</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "统计 Swift、UI、Swift 三个主题，并给空输入定义自然结果。",
+      "steps": [
+        "运行第 4 课，解释去重数 2 与 Swift 出现 2 次为什么是两个问题。",
+        "隐藏 topicCounts 的实现，凭记忆重写字典累计逻辑。",
+        "把示例 topics 临时改成 [] 并显式标为 [String]，验证没有越界。",
+        "运行 swift test --package-path examples/SwiftFoundations --filter collections。"
+      ],
+      "expected": "原输入得到 [\"Swift\": 2, \"UI\": 1]；空输入返回空字典；展示顺序通过排序显式指定。",
+      "solution": "<pre><code class=\"language-swift\">public func topicCounts(_ topics: [String]) -&gt; [String: Int] {\n    var counts: [String: Int] = [:]\n    for topic in topics {\n        counts[topic, default: 0] += 1\n    }\n    return counts\n}</code></pre><p>带 default 的字典下标允许对不存在的键从零开始累计。普通读取 counts[topic] 返回 Optional，下一课会解释原因。</p>"
+    },
+    "quiz": {
+      "question": "Set 适合去重，但展示顺序需要另行明确。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "唯一性与排序是两种不同需求；需要固定顺序时显式 sorted。"
+    },
+    "retrieval": [
+      "什么时候选 Set，什么时候必须保留 Array？",
+      "为什么空数组遍历推荐 indices 而不是 0...count-1？"
+    ],
+    "sources": [
+      {
+        "title": "The Swift Programming Language：Collection Types",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/collectiontypes/"
+      },
+      {
+        "title": "The Swift Programming Language：Control Flow",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/controlflow/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 04",
+      "path": "examples/SwiftFoundations/Sources/FoundationCore/Basics.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 4"
+    },
+    "pitfalls": [
+      "数组越界不是返回 nil，而是运行时错误。",
+      "Dictionary 和 Set 的迭代顺序不能作为产品展示规则。"
+    ],
+    "next": 5
+  },
+  {
+    "id": 5,
+    "slug": "optionals-and-guard",
+    "title": "把“可能没有值”变成必须处理的分支",
+    "module": "Swift 基础",
+    "minutes": 30,
+    "prerequisites": [
+      4
+    ],
+    "objective": "将可空文本安全转换成 1 到 180 之间的学习分钟数。",
+    "summary": "Optional 不是给类型系统添麻烦。它把“没有输入”和“转换失败”带进函数签名，使 UI 不必依赖运气才能运行。",
+    "sections": [
+      {
+        "title": "T? 是两种可能，不是 T 的别名",
+        "html": "<p><code>Int?</code> 表示“有一个 Int”或“没有值”。它与 Int 不同，不能未经检查直接参加需要 Int 的运算。Int(\"25\") 得到可选值，是因为 Int(\"abc\") 可能失败。nil 不是空字符串，也不是零；这些分别是 String、Int 中完全合法的值。和 TypeScript 的可空联合类型相比，你会看到类似的收窄思路，但 Swift 把解包机制直接纳入语言。</p><pre><code class=\"language-swift\">let text: String? = &quot;25&quot;\nif let text, let minutes = Int(text) {\n    print(minutes + 5) // 分支内 minutes 的类型是 Int\n} else {\n    print(&quot;请输入数字&quot;)\n}</code></pre>"
+      },
+      {
+        "title": "guard 让失败路径先退出",
+        "html": "<p>guard 的 else 必须离开当前作用域，例如 return 或 throw；成功解包的变量因此能在后续使用。表单校验常常适合这个形状：先排除无输入，再排除格式错误，再排除范围不合法。本例将三条条件放在一个 guard，是因为它们共享同一失败结果；若 UI 需要不同错误文案，应把结果升级成带原因的类型。</p><pre><code class=\"language-swift\">public func parseMinutes(_ input: String?) -&gt; Int? {\n    guard let input,\n          let minutes = Int(input.trimmingCharacters(in: .whitespacesAndNewlines)),\n          (1...180).contains(minutes) else { return nil }\n    return minutes\n}</code></pre>"
+      },
+      {
+        "title": "默认值与强制解包都隐含产品决策",
+        "html": "<p><code>value ?? 25</code> 表示缺失时取 25，并不会验证已有值。可选链 <code>text?.count</code> 在 text 缺失时保持 nil。<code>!</code> 则宣称值必然存在，宣称失败会终止执行；不能把它当成消除编译错误的快捷键。原生输入通常来自用户或网络，边界代码尤其应保留失败分支。</p><p>本实验把无效输入归并为 nil，因此它适合“能否提交”的简单判断。如果稍后需求要区分“必填”“格式不对”“超过上限”，不要到处添加布尔值；第 9 课会用枚举把状态与数据放在一起。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "让分钟解析器接受空白包围的合法数字，并拒绝 nil、零、非数字和超出上限。",
+      "steps": [
+        "运行第 5 课，观察 25、0、abc、nil 四条路径。",
+        "在 Basics.swift 中阅读 trimmingCharacters，并预测 \" 25\n\" 的结果。",
+        "在测试中补入 180、181 两个边界，用等于 nil 或具体值断言。",
+        "运行 swift test --package-path examples/SwiftFoundations --filter minutes；也可运行全部测试覆盖参数化拒绝案例。"
+      ],
+      "expected": "\" 25\n\" 与 \"180\" 返回对应整数；nil、\"0\"、\"181\"、\"abc\" 返回 nil。",
+      "solution": "<pre><code class=\"language-swift\">public func parseMinutes(_ input: String?) -&gt; Int? {\n    guard let input else { return nil }\n    let cleaned = input.trimmingCharacters(in: .whitespacesAndNewlines)\n    guard let minutes = Int(cleaned) else { return nil }\n    guard (1...180).contains(minutes) else { return nil }\n    return minutes\n}</code></pre><p>这是与仓库实现等价、拆成三步的完整版本。逐步 guard 有利于初学时调试；熟悉后可以合并共享失败路径。</p>"
+    },
+    "quiz": {
+      "question": "Int(\"abc\") 失败时得到 nil，可以用 guard 安全处理。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "字符串到整数不是总能成功的转换，Optional 正是在签名里表达这一点。"
+    },
+    "retrieval": [
+      "nil、0 与 \"\" 分别表达什么？",
+      "guard let 与 if let 的解包变量作用域有什么不同？"
+    ],
+    "sources": [
+      {
+        "title": "The Swift Programming Language：The Basics / Optionals",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/thebasics/"
+      },
+      {
+        "title": "The Swift Programming Language：Control Flow / Early Exit",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/controlflow/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 05",
+      "path": "examples/SwiftFoundations/Sources/FoundationCore/Basics.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 5"
+    },
+    "pitfalls": [
+      "不要把 ! 当成 TypeScript 中只影响类型检查的非空断言；Swift 的 ! 有运行时后果。",
+      "?? 是默认值策略，不是输入合法性验证。"
+    ],
+    "next": 6
+  },
+  {
+    "id": 6,
+    "slug": "functions-and-labels",
+    "title": "写出调用点清晰的函数",
+    "module": "Swift 基础",
+    "minutes": 25,
+    "prerequisites": [
+      5
+    ],
+    "objective": "用参数标签、默认值与 inout 清楚表达输入和修改行为。",
+    "summary": "函数不仅是复用代码的容器，也是调用者读得最多的界面。本课从调用语句反推 API 的命名与副作用。",
+    "sections": [
+      {
+        "title": "外部标签服务调用者，内部名字服务实现者",
+        "html": "<p>Swift 参数通常拥有调用标签和函数体内名字。<code>for minutes</code> 中 for 用于调用，minutes 用于实现；<code>_ title</code> 表示调用处省略标签。一个名字并非越短越好，<code>schedule(\"Swift\", for: 25)</code> 能让读者直接理解数字的角色。API 设计优先考虑调用点的清晰，而不是把所有参数都用下划线压短。</p><pre><code class=\"language-swift\">public func schedule(_ title: String, for minutes: Int = 25) -&gt; String {\n    &quot;\\(title)：\\(minutes) 分钟&quot;\n}\nprint(schedule(&quot;Swift&quot;))           // 使用默认 25\nprint(schedule(&quot;SwiftUI&quot;, for: 40))</code></pre>"
+      },
+      {
+        "title": "返回值通常比隐藏修改更容易推理",
+        "html": "<p>普通函数参数默认不可重新赋值。函数可以返回一个值，也可以返回元组，将几个紧密相关的结果放在一起，例如 (completed: Int, total: Int)。无返回值的函数返回 Void。只有一个表达式的函数可以省略 return；初学时显式写 return 也完全合理，不必为了简短牺牲理解。</p><pre><code class=\"language-swift\">func progressText(completed: Int, total: Int) -&gt; String {\n    return &quot;\\(completed)/\\(total)&quot;\n}\nlet format: (Int, Int) -&gt; String = progressText\nprint(format(2, 5)) // 函数类型本身不携带调用标签</code></pre>"
+      },
+      {
+        "title": "inout 把修改权限写进调用点",
+        "html": "<p><code>inout</code> 允许函数修改调用者的变量，调用时必须加 &amp;。它不等同于把 JavaScript 对象引用传入；Swift 对同一存储的重叠读写有独占访问规则。不要在同一次调用中把同一个变量交给两个会重叠访问的 inout 参数，也不要把 inout 当作可长期保存的引用。调用结束后能看到修改，但函数不拥有那个变量。</p><pre><code class=\"language-swift\">public func add(_ minutes: Int, to total: inout Int) {\n    total += minutes\n}\nvar total = 10\nadd(25, to: &amp;total) // 调用点明确标记变更\nprint(total)       // 35</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "写出一个默认安排 25 分钟的函数，再累加到已有的 10 分钟。",
+      "steps": [
+        "运行第 6 课，指出输出分别来自哪个函数。",
+        "隐藏 Basics.swift 中 schedule 与 add，独立重写签名和函数体。",
+        "把调用改为 schedule(\"阅读\", for: 15)，解释 for 与 minutes 的对应关系。",
+        "尝试把 total 声明为 let，阅读编译诊断；恢复 var 后运行。"
+      ],
+      "expected": "schedule 默认输出 Swift：25 分钟；add 更新后的 total 为 35；常量不能传给 inout。",
+      "solution": "<pre><code class=\"language-swift\">public func schedule(_ title: String, for minutes: Int = 25) -&gt; String {\n    return &quot;\\(title)：\\(minutes) 分钟&quot;\n}\npublic func add(_ minutes: Int, to total: inout Int) {\n    total += minutes\n}\nvar total = 10\nadd(25, to: &amp;total)</code></pre><p>若无需原地更新，也可选择返回 total + minutes。是否使用 inout 取决于调用者是否应该看到明确的变更语义。</p>"
+    },
+    "quiz": {
+      "question": "带 inout 的参数可以接受 let 常量，只要函数内没有真的修改。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "inout 的调用契约要求可写变量，编译器不会因为本次实现碰巧没改就允许常量。"
+    },
+    "retrieval": [
+      "参数外部标签和内部名字分别面向谁？",
+      "为什么 & 是调用者判断副作用的一个线索？"
+    ],
+    "sources": [
+      {
+        "title": "The Swift Programming Language：Functions",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/functions/"
+      },
+      {
+        "title": "Swift.org：API Design Guidelines",
+        "url": "https://www.swift.org/documentation/api-design-guidelines/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 06",
+      "path": "examples/SwiftFoundations/Sources/FoundationCore/Basics.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 6"
+    },
+    "pitfalls": [
+      "Swift 函数参数不是可随意重赋的局部 var。",
+      "inout 不是可以跨异步任务保存的引用。"
+    ],
+    "next": 7
+  },
+  {
+    "id": 7,
+    "slug": "closures-and-transformations",
+    "title": "用闭包组成可读的数据转换",
+    "module": "Swift 基础",
+    "minutes": 30,
+    "prerequisites": [
+      6
+    ],
+    "objective": "实现清理、筛选、排序的标题搜索流水线，并解释闭包捕获与逃逸。",
+    "summary": "map、filter 是熟悉的入口。接下来关注 Swift 的类型推断、尾随闭包和生命周期，而不是只把箭头换成花括号。",
+    "sections": [
+      {
+        "title": "从完整签名读懂简写",
+        "html": "<p>闭包是可以保存与传递的功能块。完整写法由参数、返回类型、in 和函数体组成；上下文足够时，参数类型和 return 可省略，还可用 $0 指第一个参数。简写的目标是让意图更清楚，嵌套多层时应恢复有意义的参数名。尾随闭包只是调用语法，不意味着异步执行。</p><pre><code class=\"language-swift\">let matches: (String) -&gt; Bool = { title in\n    title.localizedCaseInsensitiveContains(&quot;swift&quot;)\n}\nlet titles = [&quot;Swift 6&quot;, &quot;UIKit&quot;]\nprint(titles.filter(matches))\n// 相同意图的尾随闭包：\nprint(titles.filter { $0.localizedCaseInsensitiveContains(&quot;swift&quot;) })</code></pre>"
+      },
+      {
+        "title": "每一步只承担一个转换职责",
+        "html": "<p>map 将每个元素映射为新元素；filter 保留符合谓词的元素；compactMap 把映射结果中的 nil 去掉；reduce 汇总；sorted 返回排好序的新数组，sort 修改原数组。先拆成中间变量看类型，再组合成链式表达式，比写一大串之后猜编译错误更有效。这里仅处理短标题，不需要为每次分配提前引入复杂的 lazy 抽象。</p><pre><code class=\"language-swift\">public func searchableTitles(_ titles: [String], matching query: String) -&gt; [String] {\n    titles\n        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }\n        .filter { !$0.isEmpty &amp;&amp; $0.localizedCaseInsensitiveContains(query) }\n        .sorted()\n}</code></pre>"
+      },
+      {
+        "title": "闭包捕获不是自动制作快照",
+        "html": "<p>闭包可以捕获外部变量；一个可变变量后续被修改，闭包可能看到修改后的值。若要在创建时捕获当时的值，可使用捕获列表。作为函数参数的闭包默认 nonescaping，即不能在函数返回后才调用；若需要存储或稍后执行，参数声明使用 @escaping。逃逸与并发是不同维度：稍后在同一线程执行也属于逃逸；跨隔离域安全将在并发课单独学习。</p><pre><code class=\"language-swift\">var query = &quot;Swift&quot;\nlet live = { query }\nlet snapshot = { [query] in query }\nquery = &quot;SwiftUI&quot;\nprint(live())     // SwiftUI\nprint(snapshot()) // Swift</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "让标题搜索清理两端空白、忽略大小写、排除空标题并返回固定排序。",
+      "steps": [
+        "运行第 7 课，预测哪一项会被排除以及输出顺序。",
+        "把 searchableTitles 暂时拆成 cleaned、matched、sorted 三个 let，标注各自类型。",
+        "用相同输入恢复链式写法，确认行为不变。",
+        "运行 swift test --package-path examples/SwiftFoundations --filter search。"
+      ],
+      "expected": "搜索 swift 得到 [\"Swift 6\", \"swiftUI\"]，不包含 UIKit 或空字符串。",
+      "solution": "<pre><code class=\"language-swift\">public func searchableTitles(_ titles: [String], matching query: String) -&gt; [String] {\n    let cleaned: [String] = titles.map {\n        $0.trimmingCharacters(in: .whitespacesAndNewlines)\n    }\n    let matched: [String] = cleaned.filter {\n        !$0.isEmpty &amp;&amp; $0.localizedCaseInsensitiveContains(query)\n    }\n    return matched.sorted()\n}</code></pre><p>这个展开版本与仓库的链式版本等价。当前 Foundation 的 localizedCaseInsensitiveContains 对空查询返回 false，因此现有函数会返回空数组。扩展练习：若产品希望空查询显示全部非空标题，将筛选条件明确写成下面形式，并为该规则增加断言；本仓库参考实现暂不改变。</p><pre><code class=\"language-swift\">// 可选扩展：把空查询定义为“显示全部”。\n.filter { !$0.isEmpty &amp;&amp; (query.isEmpty || $0.localizedCaseInsensitiveContains(query)) }</code></pre>"
+    },
+    "quiz": {
+      "question": "尾随闭包会让 filter 自动异步执行。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "尾随闭包只改变书写位置；这里的 Array.filter 仍在当前调用中同步完成。"
+    },
+    "retrieval": [
+      "map 与 compactMap 的返回值在什么情况下不同？",
+      "为什么 escaping 不能直接等同于 async？"
+    ],
+    "sources": [
+      {
+        "title": "The Swift Programming Language：Closures",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/closures/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 07",
+      "path": "examples/SwiftFoundations/Sources/FoundationCore/Basics.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 7"
+    },
+    "pitfalls": [
+      "$0 不是全局变量；每层闭包都有自己的参数。",
+      "捕获可变变量不一定冻结创建时的值；需要快照时明确捕获。"
+    ],
+    "next": 8
+  },
+  {
+    "id": 8,
+    "slug": "structs-and-value-semantics",
+    "title": "用结构体保护业务状态的边界",
+    "module": "Swift 基础",
+    "minutes": 30,
+    "prerequisites": [
+      7
+    ],
+    "objective": "创建一个可完成的学习任务，并用副本实验验证值语义。",
+    "summary": "从 JavaScript 对象迁移时，最容易误判的是赋值后的共享关系。本课用可观察的行为建立值语义，而不是把它简化成内存布局口号。",
+    "sections": [
+      {
+        "title": "结构体描述一份值，初始化建立完整状态",
+        "html": "<p>struct 可以拥有存储属性、计算属性、初始化器和方法。初始化结束前需要为所有存储属性提供值；这让实例创建后不处于“某个字段还没赋值”的半成品状态。定义显式 init 后，我们把可读的构造 API 作为公共边界。self.title 指向实例属性，右边的 title 是参数，用 self 可以解决同名歧义。</p><pre><code class=\"language-swift\">public struct StudySession: Equatable, Codable, Sendable {\n    public let title: String\n    public let minutes: Int\n    public private(set) var isCompleted: Bool\n\n    public init(title: String, minutes: Int, isCompleted: Bool = false) {\n        self.title = title\n        self.minutes = minutes\n        self.isCompleted = isCompleted\n    }\n    public var label: String { &quot;\\(title) · \\(minutes) 分钟&quot; }\n    public mutating func complete() { isCompleted = true }\n}</code></pre>"
+      },
+      {
+        "title": "把事实存起来，把显示值算出来",
+        "html": "<p>title、minutes、isCompleted 是独立事实，label 则能由事实推导，因此用计算属性。若把 label 也存一份，字段改动后容易忘记同步。<code>private(set)</code> 允许外部读取完成状态，但只能通过类型提供的方法修改；它与彻底 private 不同。<code>mutating</code> 声明方法会改变结构体自身，所以只能在可变实例上调用。</p><p>代码中的 Equatable 让值可比较，Codable 为第 13 课的数据编码准备，Sendable 为并发课程准备。本课先关注三种属性和 complete；不需要为了开始实验一次学完所有协议。可把协议理解为类型作出的能力承诺，下一阶段会逐个拆解。</p>"
+      },
+      {
+        "title": "复制后的行为是语义，不是复制成本的承诺",
+        "html": "<p>给结构体赋值会获得独立的值。本例所有存储属性都拥有值语义，修改副本不影响原值。标准集合常使用写时复制优化，但你不应依赖其内部实现。也不要推断“struct 永远深复制”：若结构体内部保存 class 实例，副本可能仍引用同一个对象。先判断属性组成，再判断是否存在共享状态。</p><pre><code class=\"language-swift\">let original = StudySession(title: &quot;值语义&quot;, minutes: 25)\nvar copy = original\ncopy.complete()\nprint(original.isCompleted) // false\nprint(copy.isCompleted)     // true</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "在保留原始任务的同时完成一个副本，并证明原值未变化。",
+      "steps": [
+        "运行第 8 课，观察 false / true 两个结果。",
+        "阅读 Models.swift，解释 title 用 let、isCompleted 用 private(set) var 的理由。",
+        "把 copy 改为 let，编译查看 mutating 诊断；恢复 var。",
+        "运行 swift test --package-path examples/SwiftFoundations --filter valueCopy。"
+      ],
+      "expected": "原值 isCompleted 为 false，副本为 true；label 从 title、minutes 即时推导。",
+      "solution": "<pre><code class=\"language-swift\">let original = StudySession(title: &quot;值语义&quot;, minutes: 25)\nvar copy = original\ncopy.complete()\n#expect(!original.isCompleted)\n#expect(copy.isCompleted)</code></pre><p>测试应保留对原值的断言。如果只检查 copy 为 true，无法发现意外共享状态造成的回归。</p>"
+    },
+    "quiz": {
+      "question": "复制一个内部只包含值类型属性的 StudySession 后，完成副本不会完成原值。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "本例的存储属性都具有值语义，修改副本不会改变原始结构体。"
+    },
+    "retrieval": [
+      "计算属性和存储属性怎样避免重复的事实？",
+      "为什么“struct 一定深复制所有对象”这个说法不可靠？"
+    ],
+    "sources": [
+      {
+        "title": "The Swift Programming Language：Structures and Classes",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/classesandstructures/"
+      },
+      {
+        "title": "The Swift Programming Language：Properties",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/properties/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 08",
+      "path": "examples/SwiftFoundations/Sources/FoundationCore/Models.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 8"
+    },
+    "pitfalls": [
+      "Swift struct 赋值与 JavaScript 对象赋值的共享行为不同。",
+      "值语义不等于总在栈上，也不等于必须立即拷贝全部内存。"
+    ],
+    "next": 9
+  },
+  {
+    "id": 9,
+    "slug": "enums-and-pattern-matching",
+    "title": "用枚举排除不可能的状态",
+    "module": "Swift 基础",
+    "minutes": 30,
+    "prerequisites": [
+      8
+    ],
+    "objective": "用带关联值的枚举表达未开始、进行中和已完成，并穷尽处理。",
+    "summary": "许多界面 bug 来自多个布尔值互相矛盾。先用类型描述合法状态，渲染逻辑就能更直接。",
+    "sections": [
+      {
+        "title": "状态和它的数据应该一起出现",
+        "html": "<p>若同时保存 isLoading、isFinished、remaining 和 completedCount，就可能产生“已完成但仍在加载”的组合。Swift enum 能定义互斥分支，并让每个分支携带自己的关联值。active 才拥有 title 与 remainingMinutes；idle 无需伪造空标题；finished 才持有完成数。这与 TypeScript 的可辨识联合类型很接近，但 Swift 的模式匹配由语言直接支持。</p><pre><code class=\"language-swift\">public enum StudyState: Equatable, Sendable {\n    case idle\n    case active(title: String, remainingMinutes: Int)\n    case finished(completedCount: Int)\n}\nlet state = StudyState.active(title: &quot;枚举&quot;, remainingMinutes: 12)</code></pre>"
+      },
+      {
+        "title": "穷尽 switch 让新增状态被编译器追踪",
+        "html": "<p>对自有枚举的 switch 应覆盖每一种 case。当未来新增 paused，原有 switch 会提示缺少分支，帮助找到所有需要处理新状态的位置。若过早写 default，这个反馈会被隐藏。使用 case let 从关联值解包；只关心一个 case 时用 if case，不需要为了取一个字段写整套 switch。</p><pre><code class=\"language-swift\">switch state {\ncase .idle:\n    print(&quot;尚未开始&quot;)\ncase let .active(title, remainingMinutes):\n    print(&quot;\\(title)：剩余 \\(remainingMinutes) 分钟&quot;)\ncase let .finished(completedCount):\n    print(&quot;完成 \\(completedCount) 项&quot;)\n}\nif case let .active(_, remaining) = state { print(remaining) }</code></pre>"
+      },
+      {
+        "title": "原始值、关联值与 Result 各有用途",
+        "html": "<p>原始值枚举如 <code>enum Tab: String { case learn, review }</code> 给每个 case 固定的底层表示；关联值则由每次创建实例时提供，不能混为一谈。标准库 <code>Result&lt;Success, Failure&gt;</code> 也是“成功带数据，失败带错误”的枚举模型，Failure 必须符合 Error。需要把结果保存或传递时 Result 有用；同步调用出错通常直接 throws，后面会学习。</p><p>本例的剩余分钟依然可能被创建成负数：枚举解决状态组合问题，不会自动验证每个关联值的业务范围。识别类型已经保证什么、还需要校验什么，是比追求“所有东西都类型安全”更实用的工程习惯。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "为 StudyState 新增 paused(title:) 状态，利用编译器找全必须更新的代码。",
+      "steps": [
+        "先运行第 9 课，理解 active 的两个关联值。",
+        "在 Models.swift 的枚举中新增 case paused(title: String)。",
+        "构建并查看 message 的穷尽性错误，补上分支。",
+        "把 case 9 中的 state 改为 .paused(title: \"枚举\") 并运行，之后可保留新增状态或恢复练习前实现。"
+      ],
+      "expected": "新增 case 后 message 的 switch 提示未穷尽；补齐后输出 枚举：已暂停。",
+      "solution": "<pre><code class=\"language-swift\">// 加在 StudyState 的 case 声明中：\ncase paused(title: String)\n\n// 加在 message 的 switch self 中：\ncase let .paused(title):\n    return &quot;\\(title)：已暂停&quot;\n\n// FoundationLab.swift 的 case 9：\nlet state = StudyState.paused(title: &quot;枚举&quot;)\nprint(state.message)</code></pre><p>if case active 只处理进行中，因此新状态时不进入该分支，符合原有语义。无需为了通过编译而把所有 switch 改成 default。</p>"
+    },
+    "quiz": {
+      "question": "关联值可以让两个 active 实例携带不同的剩余分钟。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "关联值属于每次创建的枚举值，不是给 case 固定的原始常量。"
+    },
+    "retrieval": [
+      "为什么新增 case 后编译失败反而有助于维护？",
+      "Result 和两个可选字段 data/error 相比，避免了哪些矛盾组合？"
+    ],
+    "sources": [
+      {
+        "title": "The Swift Programming Language：Enumerations",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/enumerations/"
+      },
+      {
+        "title": "The Swift Programming Language：Control Flow",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/controlflow/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 09",
+      "path": "examples/SwiftFoundations/Sources/FoundationCore/Models.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 9"
+    },
+    "pitfalls": [
+      "Swift enum 不只是 JavaScript 数字常量集合。",
+      "default 会减少对未来新状态的编译期提醒，使用时要有明确意图。"
+    ],
+    "next": 10
+  },
+  {
+    "id": 10,
+    "slug": "protocols-and-extensions",
+    "title": "用协议表达能力，用扩展共享实现",
+    "module": "Swift 基础",
+    "minutes": 30,
+    "prerequisites": [
+      9
+    ],
+    "objective": "让不同学习项目提供相同摘要接口，并理解协议要求与默认实现。",
+    "summary": "先从真实调用者需要的两个属性与一个方法提炼协议。不要为了“架构感”给每个类型都建立对应协议。",
+    "sections": [
+      {
+        "title": "协议声明调用者可以依赖的能力",
+        "html": "<p>protocol 描述要求，不直接存放实例数据。<code>{ get }</code> 表示调用者只要求能读取，符合类型可以用 let、var 或计算属性满足它。struct、enum、class 都能符合协议，不需要共同父类。与 TypeScript 的结构化匹配不同，Swift 通常要求显式声明 conformance；只是碰巧有同名成员不会自动变成协议实现。</p><pre><code class=\"language-swift\">public protocol StudyDescribing {\n    var studyTitle: String { get }\n    var studyMinutes: Int { get }\n    func summary() -&gt; String\n}\nextension StudySession: StudyDescribing {\n    public var studyTitle: String { title }\n    public var studyMinutes: Int { minutes }\n}</code></pre>"
+      },
+      {
+        "title": "默认实现减少重复，要求本身仍要明确",
+        "html": "<p>协议扩展可以提供默认实现。将 summary 写在协议要求中，再在 extension 中提供默认版本，符合类型可以自行实现替代版本。若方法只存在于 extension 而不在协议要求中，通过协议或泛型视角调用时可能不会采用你期待的同名实现。初学时把需要动态替代的能力写成协议要求，避免把扩展当成 JavaScript prototype 覆盖机制。</p><pre><code class=\"language-swift\">public extension StudyDescribing {\n    func summary() -&gt; String {\n        &quot;\\(studyTitle)：\\(studyMinutes) 分钟&quot;\n    }\n}\nlet session = StudySession(title: &quot;协议&quot;, minutes: 25)\nprint(session.summary())</code></pre>"
+      },
+      {
+        "title": "组合能力，不扩大对象的职责",
+        "html": "<p>Reading 可以符合相同协议，却没有 complete 方法或 isCompleted 属性；摘要调用者不该因此强迫阅读材料伪装成完整学习任务。协议边界应由消费方的需求驱动。extension 适合补充方法、计算属性和协议符合；不能给已有类型直接添加实例存储属性，存储职责仍在原类型中。</p><p>标准库 Equatable、Hashable、Codable 也遵循能力组合思路。Hashable 不只是“有一个叫 hash 的字段”，它与相等语义有关；自定义类型通常先借助编译器合成，等遇到真实需求再自定义。下一课会讨论“一个符合协议的具体类型”和“装着任意实现的容器”之间的差异。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "为 Reading 实现摘要能力，并在调用点验证它不必继承 StudySession。",
+      "steps": [
+        "运行第 10 课，确认 StudySession 使用协议扩展的默认 summary。",
+        "阅读 Models.swift 中 Reading 的属性和 init，找出满足协议的两处存储。",
+        "临时在 Reading 中新增自定义 summary，返回“阅读：标题”，运行第 11 课观察多态调用。",
+        "运行 swift test --package-path examples/SwiftFoundations --filter descriptions；恢复默认实现或按新契约更新测试。"
+      ],
+      "expected": "默认 Reading(\"阅读\", 10) 返回 阅读：10 分钟；自定义 summary 后，通过 any StudyDescribing 调用也采用该要求的实现。",
+      "solution": "<pre><code class=\"language-swift\">public struct Reading: StudyDescribing {\n    public let studyTitle: String\n    public let studyMinutes: Int\n    public init(title: String, minutes: Int) {\n        studyTitle = title\n        studyMinutes = minutes\n    }\n    // 可选：不写此方法时使用协议扩展的默认实现。\n    public func summary() -&gt; String { &quot;阅读：\\(studyTitle)&quot; }\n}</code></pre><p>如果保留此定制，descriptions 测试中第一项预期改成“阅读：阅读”。这不是为了迎合实现随便改断言，而是你明确改变了展示契约。</p>"
+    },
+    "quiz": {
+      "question": "一个结构体只要恰好有协议中同名成员，就会自动声明符合该协议。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "Swift 需要显式声明符合关系，例如 extension Reading: StudyDescribing。"
+    },
+    "retrieval": [
+      "协议的 get 要求能由计算属性满足吗？",
+      "为什么可替代的 summary 要在协议本体中声明？"
+    ],
+    "sources": [
+      {
+        "title": "The Swift Programming Language：Protocols",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/protocols/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 10",
+      "path": "examples/SwiftFoundations/Sources/FoundationCore/Models.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 10"
+    },
+    "pitfalls": [
+      "协议不是 TypeScript interface 的完全等价物，符合关系需要显式声明。",
+      "extension 不能随意为类型补上实例存储属性。"
+    ],
+    "next": 11
+  },
+  {
+    "id": 11,
+    "slug": "generics-some-and-any",
+    "title": "分清泛型、some 与 any 的类型选择权",
+    "module": "Swift 基础",
+    "minutes": 35,
+    "prerequisites": [
+      10
+    ],
+    "objective": "实现保序去重，并为同构算法、隐藏返回类型和异构存储选择合适的类型形式。",
+    "summary": "不要把 some 与 any 记成性能好坏的口号。先问谁选择具体类型、是否需要保留类型关系、是否真的要混装不同类型。",
+    "sections": [
+      {
+        "title": "泛型把类型关系写进算法",
+        "html": "<p><code>unique&lt;Element: Hashable&gt;</code> 表示调用者选择 Element，但输入与输出使用同一个 Element。约束让函数能借助 Set 判定重复，而不需要转换为 Any 再强转回来。数组的顺序来自原输入，Set 只负责成员检测，因此既能去重又保留首次出现的位置。只写 Set(elements) 虽然去重，却会丢掉顺序承诺。</p><pre><code class=\"language-swift\">public func unique&lt;Element: Hashable&gt;(_ elements: [Element]) -&gt; [Element] {\n    var seen: Set&lt;Element&gt; = []\n    return elements.filter { seen.insert($0).inserted }\n}\nprint(unique([3, 1, 3, 2]))          // [3, 1, 2]\nprint(unique([&quot;Swift&quot;, &quot;UI&quot;, &quot;Swift&quot;])) // [&quot;Swift&quot;, &quot;UI&quot;]</code></pre>"
+      },
+      {
+        "title": "some 隐藏具体名字，但保持一个确定的底层类型",
+        "html": "<p>函数返回 <code>some StudyDescribing</code> 时，具体类型由函数实现决定，调用者只依赖公开的协议能力。同一个返回声明需要维持一致的底层类型，不能随某个 if 随意返回 Reading 或 StudySession。SwiftUI 的 <code>some View</code> 也利用这种类型身份；视图构建器能将条件包装成一个确定的复合类型，不代表 some 变成了任意混装容器。</p><pre><code class=\"language-swift\">public func starterReading() -&gt; some StudyDescribing {\n    Reading(title: &quot;The Swift Programming Language&quot;, minutes: 20)\n}\nlet reading = starterReading()\nprint(reading.summary())</code></pre><p>参数位置的 <code>some Protocol</code> 是泛型参数的便捷写法，具体输入仍由调用者选择；不要把“返回值由实现者选择”机械套用到所有 some 出现的位置。</p>"
+      },
+      {
+        "title": "any 为运行时容纳不同实现付出抽象成本",
+        "html": "<p><code>any StudyDescribing</code> 是存在类型，能容纳不同的符合类型。数组 [any StudyDescribing] 可以同时放 Reading 和 StudySession；取出元素后只能依赖协议暴露的能力。它会隐藏一些具体类型关系，并可能带来装箱与动态派发成本，但不要未测量就断言所有 any 都会堆分配或造成性能问题。</p><pre><code class=\"language-swift\">let items: [any StudyDescribing] = [\n    starterReading(),\n    StudySession(title: &quot;泛型&quot;, minutes: 30)\n]\nprint(summaries(items))</code></pre><p>选择顺序：类型已经清楚就使用具体类型；多个类型共享同一算法且需保留关系时用泛型；返回值想隐藏实现但保持身份时用 some；明确需要异构存储或运行时替换时用 any。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "编写同时适用于 Int 与 String 的保序去重函数，并展示一个异构协议数组。",
+      "steps": [
+        "运行第 11 课，找到 unique 的 Element 在两次调用中分别是什么。",
+        "用 Set 构造临时替换 unique，说明为何即使元素相同也不能保证满足顺序契约。",
+        "恢复 seen + filter 实现，并将 Reading 与 StudySession 放入 [any StudyDescribing]。",
+        "运行 swift test --package-path examples/SwiftFoundations --filter collections 和 --filter descriptions。"
+      ],
+      "expected": "输入 [3,1,3,2,1] 返回 [3,1,2]；混合数组中的两项都能调用 summary。",
+      "solution": "<pre><code class=\"language-swift\">public func unique&lt;Element: Hashable&gt;(_ elements: [Element]) -&gt; [Element] {\n    var seen: Set&lt;Element&gt; = []\n    var result: [Element] = []\n    for element in elements {\n        if seen.insert(element).inserted { result.append(element) }\n    }\n    return result\n}</code></pre><p>这份循环版本与仓库实现相同，但更容易逐步调试。类型信息贯穿输入、Set 和返回数组，没有一次 Any 强制转换。</p>"
+    },
+    "quiz": {
+      "question": "返回 some StudyDescribing 的同一个普通函数，可以任意返回两个不同的底层具体类型。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "不透明返回类型要求一个确定的底层类型；异构返回需调整设计，或使用合适的存在类型。"
+    },
+    "retrieval": [
+      "泛型函数的类型由谁选择，some 返回类型由谁选择？",
+      "为什么 [any StudyDescribing] 适合混装，但 [some StudyDescribing] 不表示任意混装？"
+    ],
+    "sources": [
+      {
+        "title": "The Swift Programming Language：Generics",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/generics/"
+      },
+      {
+        "title": "The Swift Programming Language：Opaque and Boxed Protocol Types",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/opaquetypes/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 11",
+      "path": "examples/SwiftFoundations/Sources/FoundationCore/Models.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 11"
+    },
+    "pitfalls": [
+      "any 不是“没有类型检查”，仍受协议能力约束。",
+      "不要只为了消除编译错误，把所有泛型返回值都改成 Any。"
+    ],
+    "next": 12
+  },
+  {
+    "id": 12,
+    "slug": "classes-arc-and-capture",
+    "title": "看见引用共享，打断闭包保留环",
+    "module": "Swift 基础",
+    "minutes": 35,
+    "prerequisites": [
+      11
+    ],
+    "objective": "解释 class 的引用身份，并验证弱捕获回调不会让拥有者泄漏。",
+    "summary": "原生工程师不仅要知道对象做什么，也要知道它什么时候可以释放。用一条明确的引用链来诊断，而不是给每个闭包机械添加 weak。",
+    "sections": [
+      {
+        "title": "class 适合需要共享身份的对象",
+        "html": "<p>class 赋值共享同一实例；<code>===</code> 比较身份，<code>==</code> 是否可用及含义取决于 Equatable 实现。let 绑定到一个类实例，只阻止这个绑定指向另一个实例，不冻结对象的 var 属性。final 表示该类不允许被继承，有助于让简单服务或状态对象的扩展边界清楚。初始化器负责建立存储属性，deinit 在实例释放前用于清理自管资源。</p><pre><code class=\"language-swift\">let first = StudyCounter()\nlet second = first\nsecond.increment()\nprint(first.count)        // 1\nprint(first === second)   // true\n// first 绑定没有改变，但它引用的实例状态改变了。</code></pre>"
+      },
+      {
+        "title": "ARC 计数强引用，环不会自行消失",
+        "html": "<p>ARC 管理类实例的引用计数。若 counter 强持有回调，回调又强捕获 counter，就形成 counter → closure → counter；外部变量置 nil 仍不打破内部环。不要把它理解为 JavaScript 垃圾回收器会按可达性自动清除所有孤岛。画出持有关系，再决定哪一条边不该拥有另一个对象。</p><pre><code class=\"language-swift\">public final class StudyCounter {\n    public private(set) var count = 0\n    public var onIncrement: (() -&gt; Void)?\n    public init() {}\n    public func increment() { count += 1 }\n    public func installCallback() {\n        onIncrement = { [weak self] in\n            self?.increment()\n        }\n    }\n}</code></pre>"
+      },
+      {
+        "title": "weak 允许对象先消失，unowned 需要生命周期证明",
+        "html": "<p>weak 不延长实例寿命，对象释放后变成 nil，因此通常是可选引用。回调里 self?.increment() 表示对象还存在才执行；这适合拥有者消失后事件自然失效的场景。unowned 则要求访问时对象一定仍活着，违反会造成运行时错误，不能为了少写问号就选择它。</p><p>本例保留回调后再清空 counter，使用独立 weak 观察者验证对象确实释放，并再次调用回调确认安全。并非每个闭包都需要 weak：立即执行的 map/filter 并不天然形成保留环；某些任务必须持有对象直到完成。先讲清所有权和业务寿命，再决定捕获策略。当前 StudyCounter 是同步教学对象，不宣称它能安全跨并发域共享。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "证明回调本身仍存活时，StudyCounter 也可以释放。",
+      "steps": [
+        "运行第 12 课，解释同一实例 true 与计数 1。",
+        "阅读 Ownership.swift 的 weakCaptureReleasesOwner，按每行画出强弱引用。",
+        "在 installCallback 中临时移除 [weak self]，改为 self.increment()；运行 ownership 测试，观察释放断言失败。",
+        "恢复弱捕获并重新测试：swift test --package-path examples/SwiftFoundations --filter ownership。"
+      ],
+      "expected": "弱捕获版本返回 true；临时强捕获版本导致测试失败；恢复后测试通过。",
+      "solution": "<pre><code class=\"language-swift\">public func installCallback() {\n    onIncrement = { [weak self] in\n        self?.increment()\n    }\n}</code></pre><p>仓库中的完整观察函数会保留 callback，并通过 WeakCounter.value 观察是否为 nil。测试不只是断言某次按钮结果，也检查真实所有权关系。临时强捕获实验只用于本地诊断，完成后恢复弱捕获版本。</p>"
+    },
+    "quiz": {
+      "question": "let 绑定到 class 实例后，该实例的所有可变属性都会被冻结。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "let 固定引用绑定，不把引用对象的内部状态递归变为不可变。"
+    },
+    "retrieval": [
+      "counter 持有闭包时，闭包捕获 counter 会形成怎样的引用图？",
+      "weak 和 unowned 在对象先释放时分别会怎样？"
+    ],
+    "sources": [
+      {
+        "title": "The Swift Programming Language：Automatic Reference Counting",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/automaticreferencecounting/"
+      },
+      {
+        "title": "The Swift Programming Language：Structures and Classes",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/classesandstructures/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 12",
+      "path": "examples/SwiftFoundations/Sources/FoundationCore/Ownership.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 12"
+    },
+    "pitfalls": [
+      "ARC 不等于自动解决所有引用环的追踪式垃圾回收。",
+      "weak 不是闭包的通用装饰器；先判断闭包是否被保留以及谁应该拥有谁。"
+    ],
+    "next": 13
+  },
+  {
+    "id": 13,
+    "slug": "errors-codable-and-cleanup",
+    "title": "把 JSON 变成可信模型，并保留失败原因",
+    "module": "Swift 基础",
+    "minutes": 35,
+    "prerequisites": [
+      12
+    ],
+    "objective": "区分解码失败和业务校验失败，使用 throws 与 defer 组织成功和失败路径。",
+    "summary": "网络能返回 JSON，并不代表数据已满足业务条件。本课把“格式能读懂”和“值可以使用”分成两个有测试的步骤。",
+    "sections": [
+      {
+        "title": "throws 让失败路径出现在签名里",
+        "html": "<p>函数标注 throws 后，调用者用 try 承认它可能失败；失败可以继续抛给上层，或用 do/catch 恢复。错误必须符合 Error。<code>try?</code> 将失败压成 nil，适合明确不需要原因的情况；<code>try!</code> 宣称不会失败，若判断错误会终止运行。读取外部 JSON 时通常不应该使用 try!。Swift 6 的 typed throws 可以进一步约束错误类型，本课用一个独立校验实验说明适用边界。</p><pre><code class=\"language-swift\">public enum PlanError: Error, Equatable {\n    case emptyTitle\n    case invalidMinutes(Int)\n}\ndo {\n    let sessions = try decodePlan(data)\n    print(sessions.count)\n} catch let error as PlanError {\n    print(&quot;业务校验失败：\\(error)&quot;)\n} catch {\n    print(&quot;读取格式失败：\\(error)&quot;)\n}</code></pre>"
+      },
+      {
+        "title": "Codable 解决表示转换，验证解决业务边界",
+        "html": "<p>Codable 组合 Encodable 与 Decodable。类型的存储属性都可编码时，编译器通常可以合成实现。JSONDecoder 从 Data 解码为确定类型，因此缺失必填字段或错误字段类型会抛错；它不会自动理解“分钟必须大于零”。本例 JSON 包含 title、minutes、isCompleted 三个键，解码后再检查标题与范围，避免形状合法却语义非法的数据流入界面。</p><pre><code class=\"language-swift\">public func decodePlan(_ data: Data) throws -&gt; [StudySession] {\n    let sessions = try JSONDecoder().decode([StudySession].self, from: data)\n    for session in sessions {\n        guard !session.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {\n            throw PlanError.emptyTitle\n        }\n        guard (1...180).contains(session.minutes) else {\n            throw PlanError.invalidMinutes(session.minutes)\n        }\n    }\n    return sessions\n}</code></pre><p>要适配不同键名可定义 CodingKeys；嵌套结构不同则写自定义解码。不要误以为给 init 参数一个默认值，合成 Decodable 就会自动在 JSON 缺字段时调用那个默认参数。</p>"
+      },
+      {
+        "title": "Swift 6 typed throws：只在错误集合明确时收窄",
+        "html": "<p><code>throws(MinutesError)</code> 约定函数只能抛出 MinutesError。这个同步校验只检查分钟范围，错误集合由同一模块控制，因此调用者可以穷尽处理。<code>do</code> 中若只调用这一种 typed-throws 函数，<code>catch</code> 的 error 保留具体类型；普通 <code>throws</code> 则等价于 <code>throws(any Error)</code>。这些规则自 Swift 6.0 起可用，见 <a href=\"https://github.com/swiftlang/swift-evolution/blob/main/proposals/0413-typed-throws.md\">SE-0413</a>。</p><pre><code class=\"language-swift\">enum MinutesError: Error { case outOfRange(Int) }\n\nfunc validatedMinutes(_ value: Int) throws(MinutesError) -&gt; Int {\n    guard (1...180).contains(value) else {\n        throw MinutesError.outOfRange(value)\n    }\n    return value\n}\n\ndo {\n    print(try validatedMinutes(0))\n} catch {\n    // 此处 error 的类型是 MinutesError，不需要强转。\n    switch error {\n    case .outOfRange(let value): print(\"拒绝分钟：\\(value)\")\n    }\n}</code></pre><p>完整可运行示例是 <a href=\"../examples/PlatformRecipes/TypedThrows.swift\">TypedThrows.swift</a>，依次验证 25、0、181。网络、JSON 解码和任务取消可能产生不同错误；本课 decodePlan 需要保留 DecodingError 与 PlanError，因此继续使用普通 throws。不要为了采用新语法把不同故障强行压成同一种错误。</p><pre><code class=\"language-shell\">swift -swift-version 6 examples/PlatformRecipes/TypedThrows.swift</code></pre>"
+      },
+      {
+        "title": "把清理注册在取得资源的附近",
+        "html": "<p>defer 在离开当前作用域时执行，无论通过正常返回还是抛错，多个 defer 按后注册先执行。它适合关闭文件、释放锁等同步清理；不是“稍后某个任意时间”或异步调度。本实验用 cleanup 回调让行为可以测试，不读写用户文件。编码 round trip 测试验证模型经 JSON 往返没有丢失数据；非法数据测试则验证业务规则。</p><pre><code class=\"language-swift\">public func withCleanup&lt;Value&gt;(\n    _ operation: () throws -&gt; Value,\n    cleanup: () -&gt; Void\n) rethrows -&gt; Value {\n    defer { cleanup() }\n    return try operation()\n}</code></pre><p>rethrows 表示该函数只有在传入闭包抛错时才会抛错。这里不需要提前掌握复杂错误抽象，先理解清理不会因中途 throw 而被漏掉。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "验证三类输入：可用记录、分钟为零的合法 JSON、结构错误的 JSON。",
+      "steps": [
+        "运行第 13 课，观察清理日志、编码结果和预期的业务错误。",
+        "把演示 data 的 minutes 改成 0，沿着 try 调用找出错误如何向上冒泡；恢复合法输入。",
+        "阅读 invalidDomainData 测试，区分 PlanError 与 DecodingError。",
+        "运行 swift test --package-path examples/SwiftFoundations --filter roundTrip，再运行 --filter cleanup。",
+        "运行 TypedThrows.swift，观察有效与越界输入；临时将 throws(MinutesError) 改成 throws，阅读 catch 处的类型诊断，再恢复。"
+      ],
+      "expected": "合法记录可编码往返；minutes=0 抛 PlanError.invalidMinutes(0)；{} 解成数组时抛 DecodingError；cleanup 在成功和抛错时均执行一次。 typed throws 实验接受 25，分别拒绝 0 和 181；改为普通 throws 后需重新设计 catch 中的类型处理。",
+      "solution": "<pre><code class=\"language-swift\">let valid = Data(#&quot;[{&quot;title&quot;:&quot;Swift&quot;,&quot;minutes&quot;:25,&quot;isCompleted&quot;:false}]&quot;#.utf8)\nlet sessions = try decodePlan(valid)\nlet encoded = try encodePlan(sessions)\n#expect(try decodePlan(encoded) == sessions)\n\nlet invalid = Data(#&quot;[{&quot;title&quot;:&quot;Swift&quot;,&quot;minutes&quot;:0,&quot;isCompleted&quot;:false}]&quot;#.utf8)\n#expect(throws: PlanError.invalidMinutes(0)) {\n    try decodePlan(invalid)\n}</code></pre><p>完整 decodePlan、encodePlan 与 withCleanup 都在 Persistence.swift。改变测试时保持“格式”与“业务”两个层次，不要统一 catch 后返回空数组掩盖问题。</p>"
+    },
+    "quiz": {
+      "question": "JSONDecoder 成功解码后，minutes 就一定满足 1 到 180 的业务范围。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "Decodable 形状与类型检查不自动知道业务范围；必须显式验证。"
+    },
+    "retrieval": [
+      "try? 为什么可能让错误排查变困难？",
+      "defer 在 return 和 throw 两条路径上有何共同点？",
+      "为什么分钟校验适合 typed throws，而 decodePlan 仍保留普通 throws？"
+    ],
+    "sources": [
+      {
+        "title": "The Swift Programming Language：Error Handling",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/errorhandling/"
+      },
+      {
+        "title": "Apple：Encoding and Decoding Custom Types",
+        "url": "https://developer.apple.com/documentation/foundation/encoding-and-decoding-custom-types"
+      },
+      {
+        "title": "SE-0413：Typed throws（Swift 6.0）",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0413-typed-throws.md"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 13",
+      "path": "examples/SwiftFoundations/Sources/FoundationCore/Persistence.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 13\nswift -swift-version 6 examples/PlatformRecipes/TypedThrows.swift"
+    },
+    "pitfalls": [
+      "JSON 解析成功不代表可信业务数据。",
+      "init 参数默认值不等于 JSON 缺字段时的默认解码规则。"
+    ],
+    "next": 14
+  },
+  {
+    "id": 14,
+    "slug": "testing-and-cli-milestone",
+    "title": "里程碑：交付一个有行为测试的学习计划核心",
+    "module": "Swift 基础",
+    "minutes": 35,
+    "prerequisites": [
+      13
+    ],
+    "objective": "完成可复用 StudyPlan 模块，并用 Swift Testing 验证边界和重复操作。",
+    "summary": "把前十三课串成一个小但完整的业务核心：可以生成计划、完成任务、显示摘要，并由独立测试证明关键行为。",
+    "sections": [
+      {
+        "title": "先写可观察的契约",
+        "html": "<p>本里程碑约定：计划由若干 StudySession 组成；完成一个有效位置返回 true；重复完成仍成功，但计数不重复增加；越界操作返回 false 且不改变计划。计数和总分钟由 sessions 计算，避免多个存储字段同步失败。这些规则不依赖命令行或 SwiftUI，因此应放在 FoundationCore 模块，而不是藏在 UI 事件处理器里。</p><pre><code class=\"language-swift\">public struct StudyPlan: Equatable, Sendable {\n    public private(set) var sessions: [StudySession]\n    public init(sessions: [StudySession]) { self.sessions = sessions }\n    public var totalMinutes: Int { sessions.reduce(0) { $0 + $1.minutes } }\n    public var completedCount: Int { sessions.filter(\\.isCompleted).count }\n    @discardableResult\n    public mutating func complete(at index: Int) -&gt; Bool {\n        guard sessions.indices.contains(index) else { return false }\n        sessions[index].complete()\n        return true\n    }\n}</code></pre>"
+      },
+      {
+        "title": "Swift Testing 断言行为，而不是复述实现",
+        "html": "<p>使用 import Testing、@Test 与 #expect，不需要继承测试基类。参数化 @Test(arguments:) 能用相同契约覆盖多个输入；throws 断言检查失败类型。先安排数据，再执行操作，最后断言，尤其 mutating 调用适合先保存结果再传给 #expect。测试运行器可能并行执行测试，因此每个测试都创建自己的数据，不依赖前一个测试留下的全局状态。</p><pre><code class=\"language-swift\">@Test(&quot;重复完成不重复计数&quot;)\nfunc repeatedCompletion() {\n    var plan = StudyPlan(sessions: [StudySession(title: &quot;Swift&quot;, minutes: 25)])\n    let first = plan.complete(at: 0)\n    let again = plan.complete(at: 0)\n    #expect(first)\n    #expect(again)\n    #expect(plan.completedCount == 1)\n}</code></pre>"
+      },
+      {
+        "title": "公共 API 是要维护的承诺",
+        "html": "<p>Swift 默认 internal，即同一模块可见；另一个 target 需要使用的声明才加 public。public 类型不会自动让所有成员 public，成员和初始化器需要按意图公开。private(set) 允许读取事实，但把修改集中到方法；这让将来的 UI 无法绕过更新入口。课程测试只 import 公共模块，用用户能调用的 API 检查契约，而不是为访问私有方法强行扩大可见性。</p><p>清晰命名也属于正确性：complete(at:) 中 at 说明数字是位置，不是任务 ID。此处位置用于固定 CLI 练习；真正可排序的 UI 列表通常需要稳定 ID，SwiftUI 模块会进一步改进模型。运行器出现 XCTest “0 tests” 后，还需继续看 Swift Testing 汇总；本包实际应报告 13 个测试，通过才算验证完成。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "独立重写 complete(at:)，用边界和幂等测试证明它符合契约。",
+      "steps": [
+        "运行第 14 课，记录计划摘要。",
+        "隐藏 StudyPlan.swift 的 complete 实现，根据本课契约重写。",
+        "在 planMilestone 测试中保留 -1、count、重复完成和“失败后状态不变”的断言。",
+        "运行 swift test --package-path examples/SwiftFoundations；随后运行 foundation-lab all 回看完整模块。",
+        "向老师解释哪三个功能可直接复用到 SwiftUI，哪一部分只是 CLI 的职责。"
+      ],
+      "expected": "输出“计划 2 项 · 共 60 分钟 · 已完成 1 项”，越界返回 false；全部 13 个测试通过（分钟校验另含 5 个参数化案例）。",
+      "solution": "<pre><code class=\"language-swift\">@discardableResult\npublic mutating func complete(at index: Int) -&gt; Bool {\n    guard sessions.indices.contains(index) else { return false }\n    sessions[index].complete()\n    return true\n}\n\n// 测试中验证越界不修改原值：\nlet before = plan\nlet accepted = plan.complete(at: 99)\n#expect(!accepted)\n#expect(plan == before)</code></pre><p>完整可运行里程碑包括 StudyPlan.swift、FoundationLab.swift 的 case 14 和 FoundationCoreTests.swift 的 planMilestone。不要只为了达到覆盖率重复断言同一行；这些测试分别保护边界、幂等与汇总业务规则。</p>"
+    },
+    "quiz": {
+      "question": "把 public 写在 struct 前面，会自动让其中每个属性和初始化器都变成 public。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "成员可见性仍需显式设计，public 类型中的默认成员通常仍是 internal。"
+    },
+    "retrieval": [
+      "为什么重复完成和越界不修改状态是比“调用没有崩溃”更强的测试？",
+      "为什么业务核心不应该 import SwiftUI？"
+    ],
+    "sources": [
+      {
+        "title": "Swift Testing：官方 README 与快速示例",
+        "url": "https://github.com/swiftlang/swift-testing/blob/main/README.md"
+      },
+      {
+        "title": "Swift.org：API Design Guidelines",
+        "url": "https://www.swift.org/documentation/api-design-guidelines/"
+      },
+      {
+        "title": "Swift.org：Build a Command-line Tool",
+        "url": "https://www.swift.org/getting-started/cli-swiftpm/"
+      },
+      {
+        "title": "The Swift Programming Language：Access Control",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/accesscontrol/"
+      }
+    ],
+    "lab": {
+      "label": "基础实验 14",
+      "path": "examples/SwiftFoundations/Tests/FoundationCoreTests/FoundationCoreTests.swift",
+      "command": "swift run --package-path examples/SwiftFoundations foundation-lab 14"
+    },
+    "pitfalls": [
+      "测试完成不等于你已掌握；应能脱离答案重新解释并实现。",
+      "不要在测试之间共享可变全局计划，也不要用实现细节替代行为契约。"
+    ],
+    "next": 15
+  }
+]

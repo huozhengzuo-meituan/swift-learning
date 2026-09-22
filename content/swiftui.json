@@ -1,0 +1,696 @@
+[
+  {
+    "id": 25,
+    "slug": "swiftui-app-scene-view",
+    "title": "从 App 到 View：声明式界面的边界",
+    "module": "SwiftUI",
+    "minutes": 30,
+    "prerequisites": [
+      24
+    ],
+    "objective": "运行 NativeStudy，并用一个纯 View 描述学习条目的显示。",
+    "summary": "你已有组件化经验，本课把组件、应用入口和窗口生命周期对应到 SwiftUI；不要把 View 结构体当作持久的 DOM 节点。",
+    "sections": [
+      {
+        "title": "App 声明入口，Scene 声明窗口",
+        "html": "<p>NativeStudyApp 的 @main 是程序入口。它的 body 返回 some Scene，WindowGroup 内放根视图；系统管理窗口与场景的生命周期。一个 macOS 应用可以同时有多个窗口，不能把某一行列表的局部选择存为全局唯一变量。App 层适合建立依赖并注入，Scene 层决定窗口组织，View 层负责展示和交互。示例把持久化容器在 App 初始化时构建一次，并将初始化失败转换为界面，而不是静默创建空库。</p><pre><code class=\"language-swift\">@main\n@MainActor\nstruct TinyApp: App {\n    var body: some Scene {\n        WindowGroup { WelcomeView() } // 系统管理窗口\n    }\n}</code></pre>"
+      },
+      {
+        "title": "body 描述当前结果，不负责执行副作用",
+        "html": "<p>body 是计算属性，可因依赖变化重新求值。写法类似从 props/state 得到 UI，但没有一套可任意修改的 DOM；结构体实例可以被重复建立，框架根据身份关联状态。不要在 body 中插入数据库、启动网络或修改状态，否则重复求值会触发重复工作。示例用 Button 的 action 执行保存或状态变更，用 .task 启动与视图生命周期关联的异步工作。把“声明内容”与“响应事件”分开，是后面正确理解 SwiftUI 的基础。</p><pre><code class=\"language-swift\">@MainActor\nstruct WelcomeView: View {\n    var body: some View {\n        VStack(alignment: .leading) {\n            Text(&quot;Native Study&quot;).font(.title)\n            Text(&quot;每天练习一个具体技能&quot;)\n        }\n    }\n}</code></pre>"
+      },
+      {
+        "title": "some View 与 result builder",
+        "html": "<p>some View 表示编译器知道具体返回类型，调用者只依赖 View 协议。VStack 的构建闭包使用 result builder，把多个表达式和条件分支组合为一种视图结构；它不是把任意语句变成 UI。if 决定结构，ForEach 根据身份生成子视图。先把组合拆成小 View，再考虑抽象，不必为统一返回类型到处套 AnyView。示例的加载状态 switch 清楚地表达互斥界面，具体类型仍由编译器处理。</p><pre><code class=\"language-swift\">struct StatusLabel: View {\n    let completed: Bool\n    var body: some View {\n        if completed {\n            Label(&quot;Completed&quot;, systemImage: &quot;checkmark.circle&quot;)\n        } else {\n            Label(&quot;In progress&quot;, systemImage: &quot;circle&quot;)\n        }\n    }\n}</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "在 NativeStudy 的 StudyRow 里增加一个明确描述学习状态的文本组件。",
+      "steps": [
+        "先运行项目并新增一条 SwiftUI 学习记录。",
+        "在 StudyListView.swift 添加 StatusLabel，再放入 StudyRow 的 VStack。",
+        "完成条目后观察列表显示；关闭重开验证记录仍在。"
+      ],
+      "expected": "一处模型状态同时驱动详情和列表，body 中没有写数据库或请求资源。",
+      "solution": "<p>将上面的 StatusLabel 加到文件末尾，在 StudyRow 的 VStack 最后写入 StatusLabel(completed: item.isCompleted)。不要在 body 里调用 StudyWriter.toggle；切换动作仍由详情按钮触发。</p><pre><code class=\"language-swift\">StatusLabel(completed: item.isCompleted)</code></pre>"
+    },
+    "quiz": {
+      "question": "body 应主要描述界面，把插入记录等副作用放到明确操作入口。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "body 可以多次求值，数据库操作需有明确触发与失败处理。"
+    },
+    "retrieval": [
+      "App.body 与 View.body 分别返回哪类内容？",
+      "为什么不能用 View 的 init 次数表示页面真正出现次数？"
+    ],
+    "sources": [
+      {
+        "title": "App",
+        "url": "https://developer.apple.com/documentation/swiftui/app"
+      },
+      {
+        "title": "View",
+        "url": "https://developer.apple.com/documentation/swiftui/view"
+      }
+    ],
+    "lab": {
+      "label": "NativeStudy · NativeStudyApp.swift",
+      "path": "examples/NativeStudy/Sources/NativeStudyApp.swift",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj；选择 NativeStudy-macOS → My Mac → ⌘R（iOS 选择 NativeStudy-iOS 和模拟器）。"
+    },
+    "pitfalls": [
+      "不要把 View 值的构造等同于组件挂载。",
+      "不要在声明内容时执行有持久副作用的操作。"
+    ],
+    "next": 26
+  },
+  {
+    "id": 26,
+    "slug": "layout-and-modifiers",
+    "title": "布局与修饰器：理解包裹顺序",
+    "module": "SwiftUI",
+    "minutes": 30,
+    "prerequisites": [
+      25
+    ],
+    "objective": "通过交换 padding 与 background，预测并验证布局结果。",
+    "summary": "从 CSS 转向 SwiftUI 时，先理解父级提议尺寸、子级选择尺寸、父级放置子级的协作。",
+    "sections": [
+      {
+        "title": "栈表达关系，尺寸随内容变化",
+        "html": "<p>HStack 横向排列，VStack 纵向排列，ZStack 叠放。示例行用 firstTextBaseline 对齐图标和文字，用内层 VStack 表示标题和时间的组合。SwiftUI 布局不是给每个元素套 CSS 样式再执行网页排版；容器向子视图提供尺寸约束，子视图据此报告尺寸。使用 .font(.headline) 等语义字体让界面适应阅读偏好，别提前固定每行文字高度。</p><pre><code class=\"language-swift\">HStack(alignment: .firstTextBaseline, spacing: 12) {\n    Image(systemName: &quot;book&quot;)\n    VStack(alignment: .leading, spacing: 4) {\n        Text(&quot;SwiftUI 数据流&quot;).font(.headline)\n        Text(&quot;State → Binding&quot;).font(.caption)\n    }\n}</code></pre>"
+      },
+      {
+        "title": "修饰器返回新视图，顺序会改变含义",
+        "html": "<p>每次修饰器调用都可以理解为给前面的视图加一层包装。先 padding 再 background，背景覆盖留白；先 background 再 padding，留白落在背景之外。frame 并不是直接改掉所有内部视图尺寸，而是参与外层布局约束；offset 主要改变显示位置，不能用来替代兄弟视图正常排布。这些区别解释了为什么照搬“先写 margin 再写颜色”的 CSS 心智会产生误判。</p><pre><code class=\"language-swift\">// 蓝色背景包含 24 点留白。\nText(&quot;Padding then background&quot;)\n    .padding(24)\n    .background(.blue.opacity(0.2))\n\n// 留白位于蓝色区域之外。\nText(&quot;Background then padding&quot;)\n    .background(.blue.opacity(0.2))\n    .padding(24)</code></pre>"
+      },
+      {
+        "title": "让布局承受真实内容",
+        "html": "<p>LayoutWorkshopView 使用 ScrollView 处理超长内容，VStack 沿 leading 对齐，再用 frame(maxWidth: .infinity, alignment: .leading) 把剩余空间分配到外层。测试时要拉窄窗口、输入长中文和较长英文、增大辅助功能字号。文字在正常尺寸好看不代表布局合格；宁可允许多行并滚动，也不要通过缩小字体掩盖信息。GeometryReader 和自定义 Layout 留到测量确有必要时再引入。</p><pre><code class=\"language-swift\">VStack(alignment: .leading, spacing: 24) {\n    Text(&quot;一段会随着宽度自动换行的学习说明&quot;)\n        .font(.body)\n}\n.frame(maxWidth: .infinity, alignment: .leading)\n.padding()</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "打开详情中的 Layout workshop，并设计一张可随窗口宽度伸缩的学习卡片。",
+      "steps": [
+        "先口头预测两种修饰器顺序的背景范围，再运行观察。",
+        "新增 VStack 卡片，使用 headline/body 字体、padding 和 rounded rectangle 背景。",
+        "将窗口缩窄，替换成长标题，并在 iOS 模拟器提高字号。"
+      ],
+      "expected": "两种背景范围确实不同；长标题完整显示，布局不会依赖固定文本高度。",
+      "solution": "<p>将 padding 放到 background 前，让卡片底色包含内部留白；外部卡片间距交给父 VStack 的 spacing。</p><pre><code class=\"language-swift\">VStack(alignment: .leading, spacing: 8) {\n    Text(&quot;理解 SwiftUI 的布局协作&quot;).font(.headline)\n    Text(&quot;先预测，再运行验证。&quot;)\n}\n.padding()\n.background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))</code></pre>"
+    },
+    "quiz": {
+      "question": "padding 与 background 调换顺序，可能改变背景覆盖的区域。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "修饰器包装当前结果，先后次序形成不同视图结构。"
+    },
+    "retrieval": [
+      "为何固定 Text 高度容易在大字号下出问题？",
+      "frame(maxWidth: .infinity) 与把文本绘制位置 offset 有什么不同？"
+    ],
+    "sources": [
+      {
+        "title": "Laying out a simple view",
+        "url": "https://developer.apple.com/documentation/swiftui/laying-out-a-simple-view"
+      },
+      {
+        "title": "View modifiers",
+        "url": "https://developer.apple.com/documentation/swiftui/view"
+      }
+    ],
+    "lab": {
+      "label": "NativeStudy · StudyDetailView.swift",
+      "path": "examples/NativeStudy/Sources/StudyDetailView.swift",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj；选择 NativeStudy-macOS → My Mac → ⌘R（iOS 选择 NativeStudy-iOS 和模拟器）。"
+    },
+    "pitfalls": [
+      "不要把 padding 当成与顺序无关的 CSS 属性。",
+      "不要用大量 offset 修补本应由容器表达的布局关系。"
+    ],
+    "next": 27
+  },
+  {
+    "id": 27,
+    "slug": "state-and-binding",
+    "title": "State 与 Binding：找到唯一数据源",
+    "module": "SwiftUI",
+    "minutes": 30,
+    "prerequisites": [
+      26
+    ],
+    "objective": "把编辑表单拆成父级草稿与子级笔记编辑器，并保留取消语义。",
+    "summary": "核心问题不是“该套哪个包装器”，而是“谁持有值、谁需要读、谁被授权写”。",
+    "sections": [
+      {
+        "title": "State 给视图身份提供状态存储",
+        "html": "<p>普通 struct 的属性描述输入；@State 表示由 SwiftUI 管理的局部存储。StudyEditorView 持有 StudyDraft，界面读取 draft 后依赖它的变化。State 的初始值不是每次父视图传入参数变化时都重新覆盖，所以编辑另一条记录必须给编辑器合适的身份。示例 sheet 使用独立 EditorRequest，避免把上一次表单残留当成新记录。不要为了同步 props 盲目复制出多份 State。</p><pre><code class=\"language-swift\">@State private var draft = StudyDraft()\n\nvar body: some View {\n    TextField(&quot;Title&quot;, text: $draft.title)\n    // draft.title 是当前值，$draft.title 是读写通道。\n}</code></pre>"
+      },
+      {
+        "title": "Binding 借用读写通道，不拥有第二份值",
+        "html": "<p>子视图只展示时传 let 值；需要编辑时传 Binding。NotesField 的 @Binding text 指向父级 draft.notes，TextEditor 写入的正是父级数据。它不是每次复制一个 String 并让两份值自动同步。自定义 Binding(get:set:) 能把 alert 的显示状态映射到可选错误字符串，但 setter 必须维护一致性，例如关闭 alert 后清除 errorMessage，而不是把错误永久留着。</p><pre><code class=\"language-swift\">struct NotesField: View {\n    @Binding var text: String\n    var body: some View {\n        TextEditor(text: $text)\n            .accessibilityLabel(&quot;Notes&quot;)\n    }\n}\n// 父级：NotesField(text: $draft.notes)</code></pre>"
+      },
+      {
+        "title": "草稿使取消操作有准确含义",
+        "html": "<p>SwiftData 的 StudyItem 是被 context 追踪的对象。若直接将编辑框绑定到 item.title，用户每次输入都已经改变共享模型，点击取消不能仅仅 dismiss。示例先将字段复制到值类型 StudyDraft，保存时验证并应用到模型；取消只丢弃草稿。这与 Web 表单的受控输入相似，但这里还涉及本地持久化对象，必须明确提交边界。新课程 UI 状态默认留在 MainActor 内。</p><pre><code class=\"language-swift\">init(item: StudyItem?, onSave: @escaping (UUID) -&gt; Void) {\n    self.item = item\n    self.onSave = onSave\n    _draft = State(initialValue: StudyDraft(\n        title: item?.title ?? &quot;&quot;,\n        notes: item?.notes ?? &quot;&quot;\n    ))\n}</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "验证编辑后取消不会改变原条目，并给子编辑器增加实时字符数。",
+      "steps": [
+        "新建一条标题为 Original 的记录，打开编辑修改内容后取消。",
+        "重新打开，确认原标题没有被改变。",
+        "在 NotesField 内添加 Text(text.count.formatted())，输入时观察数字。"
+      ],
+      "expected": "取消后仍为 Original；字符数与输入即时同步，父子没有重复状态。",
+      "solution": "<p>字符数是 text 的派生值，不需要 @State var count，也不需要 onChange 手动同步。</p><pre><code class=\"language-swift\">VStack(alignment: .leading) {\n    TextEditor(text: $text)\n    Text(text.count.formatted()).font(.caption)\n}</code></pre>"
+    },
+    "quiz": {
+      "question": "子视图通过 Binding 编辑父级草稿，可以共享同一真值来源。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "Binding 提供对已有状态的读写访问；不应再复制一个独立 State 造成分叉。"
+    },
+    "retrieval": [
+      "什么时候传 let，什么时候传 Binding？",
+      "为什么复制模型字段到草稿通常比取消时逐个回滚更清楚？"
+    ],
+    "sources": [
+      {
+        "title": "State",
+        "url": "https://developer.apple.com/documentation/swiftui/state"
+      },
+      {
+        "title": "Binding",
+        "url": "https://developer.apple.com/documentation/swiftui/binding"
+      }
+    ],
+    "lab": {
+      "label": "NativeStudy · StudyEditorView.swift",
+      "path": "examples/NativeStudy/Sources/StudyEditorView.swift",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj；选择 NativeStudy-macOS → My Mac → ⌘R（iOS 选择 NativeStudy-iOS 和模拟器）。"
+    },
+    "pitfalls": [
+      "不要把初始值当成持续同步机制。",
+      "不要把可以计算得到的字符数重复保存为状态。"
+    ],
+    "next": 28
+  },
+  {
+    "id": 28,
+    "slug": "observation-and-ownership",
+    "title": "Observation：共享模型、所有权与隔离",
+    "module": "SwiftUI",
+    "minutes": 30,
+    "prerequisites": [
+      27
+    ],
+    "objective": "用环境注入一份可观察偏好，并让设置页通过 Bindable 修改它。",
+    "summary": "iOS 17 / macOS 14 起，本课程采用 Observation；老项目中的 ObservableObject 仍需读懂，但不混用所有权规则。",
+    "sections": [
+      {
+        "title": "Observable 追踪依赖，MainActor 管理隔离",
+        "html": "<p>@Observable 宏为类型生成观察机制。body 读取某个可观察属性，就建立对应依赖；仅传递对象引用不等于读取所有属性。@Observable 本身不保证线程安全，也不会自动把方法放在后台。本例 StudyPreferences 同时标记 @MainActor，说明这些 UI 偏好归主 actor 管理。普通 Sendable 服务值与 UI 模型分开，有利于解释数据跨隔离域时的边界。</p><pre><code class=\"language-swift\">@MainActor\n@Observable\nfinal class StudyPreferences {\n    var showCompleted = true\n    var simulateResourceFailure = false\n}</code></pre>"
+      },
+      {
+        "title": "创建者用 State 持有，后代按类型读取环境",
+        "html": "<p>NativeStudyApp 负责创建偏好，使用 @State 持有它，然后 .environment(preferences) 注入视图树。后代使用 @Environment(StudyPreferences.self) 获得同一实例。环境不是数据库，也不是全局服务定位器；把对象注入特定树，测试或预览便能替换它。忘记为非可选环境依赖注入对象会产生运行时问题，所以每个独立 Preview 都要建立完整依赖。</p><pre><code class=\"language-swift\">// App 中：\n@State private var preferences = StudyPreferences()\n// 根视图：StudyListView().environment(preferences)\n\n// 子视图中：\n@Environment(StudyPreferences.self) private var preferences</code></pre>"
+      },
+      {
+        "title": "Bindable 为对象属性产生 Binding",
+        "html": "<p>拿到 Observable 引用后，可以直接读写属性；只有 Toggle、TextField 等 API 需要 Binding 时，才需要 @Bindable 投影。示例在 body 内声明局部 @Bindable，随后传 $preferences.showCompleted。这不会再创建一个独立对象，所有读取同一实例该属性的视图都能响应。偏好这里只活在应用会话中，关闭进程后恢复默认值；不要误把观察更新等同于持久化。</p><pre><code class=\"language-swift\">var body: some View {\n    @Bindable var preferences = preferences\n    Form {\n        Toggle(&quot;Show completed items&quot;,\n               isOn: $preferences.showCompleted)\n    }\n}</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "新增一个会话偏好 showCreationDate，控制列表是否显示创建日期。",
+      "steps": [
+        "在 StudyPreferences 添加默认 true 的 Bool。",
+        "在 PreferencesView 添加 Toggle，继续使用局部 @Bindable。",
+        "StudyRow 从环境读取偏好，并按 showCreationDate 决定日期是否显示。"
+      ],
+      "expected": "设置开关即时影响行内容；重启应用恢复默认，学习条目依然持久保存。",
+      "solution": "<p>在 StudyRow 中声明环境依赖，在原日期 Text 外添加条件；所有权继续留在 App。</p><pre><code class=\"language-swift\">@Environment(StudyPreferences.self) private var preferences\n// body 内：\nif preferences.showCreationDate {\n    Text(item.createdAt, format: .dateTime.month().day())\n}</code></pre>"
+    },
+    "quiz": {
+      "question": "Observable 宏自动保证对象能在任何线程被安全修改。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "Observation 与并发隔离职责不同；本例用 MainActor 约束 UI 模型。"
+    },
+    "retrieval": [
+      "为什么偏好创建在 App 层，而表单 draft 创建在编辑器内？",
+      "Environment 与 Bindable 分别解决什么问题？"
+    ],
+    "sources": [
+      {
+        "title": "Managing model data in your app",
+        "url": "https://developer.apple.com/documentation/swiftui/managing-model-data-in-your-app"
+      }
+    ],
+    "lab": {
+      "label": "NativeStudy · StudyPreferences.swift",
+      "path": "examples/NativeStudy/Sources/StudyPreferences.swift",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj；选择 NativeStudy-macOS → My Mac → ⌘R（iOS 选择 NativeStudy-iOS 和模拟器）。"
+    },
+    "pitfalls": [
+      "不要把 Observable 当成自动持久化或线程安全机制。",
+      "不要在每个子视图重新创建偏好对象导致状态分叉。"
+    ],
+    "next": 29
+  },
+  {
+    "id": 29,
+    "slug": "identity-lists-lifetime",
+    "title": "身份与列表：状态为什么会保留或重置",
+    "module": "SwiftUI",
+    "minutes": 30,
+    "prerequisites": [
+      28
+    ],
+    "objective": "用稳定 ID 列表，并在筛选状态下删除正确条目。",
+    "summary": "React key 的经验很有帮助，但还需要把身份与 SwiftUI 的局部存储、导航和异步任务生命周期联系起来。",
+    "sections": [
+      {
+        "title": "身份回答是不是同一个元素",
+        "html": "<p>ForEach 需要可标识数据或明确 id。StudyItem 初始化时生成 UUID，修改标题、切换完成状态、重新排序时仍使用同一 ID。不要写计算属性 var id: UUID { UUID() }，那意味着每次读取都换一个身份；也不要用可编辑标题当身份，否则改名会被当成删除旧视图再插入新视图。身份影响 State 的关联、选择状态与动画，并非只用于消除编译错误。</p><pre><code class=\"language-swift\">@Model\nfinal class StudyItem {\n    @Attribute(.unique) var id: UUID\n    var title: String\n    // id 在初始化时生成一次，之后随数据持久保存。\n}</code></pre>"
+      },
+      {
+        "title": "删除的索引属于当前展示集合",
+        "html": "<p>示例 visibleItems 先执行搜索和完成状态筛选，然后 ForEach 展示结果。.onDelete 给出的 IndexSet 是这个结果集合的偏移量。如果拿它去索引原始 items，在隐藏条目存在时就会删错数据。先将当前偏移映射为模型或稳定 ID，再提交删除。列表过滤适合课程的小规模数据；大规模列表应考虑 Query predicate，不能把所有数据库记录拉到内存后无限过滤。</p><pre><code class=\"language-swift\">ForEach(visibleItems) { item in\n    NavigationLink(value: item.id) { StudyRow(item: item) }\n}\n.onDelete { offsets in\n    let targets = offsets.map { visibleItems[$0] }\n    delete(targets)\n}</code></pre>"
+      },
+      {
+        "title": "有意重置与无意丢失不同",
+        "html": "<p>详情使用 .id(item.id)，意味着切换到另一学习条目时重建详情的局部加载器和重试计数。这是明确的产品选择；如果要跨条目保留编辑进度，草稿必须搬到更长寿命的拥有者。不能在根视图随便加 .id(UUID()) 强行刷新，那会反复销毁状态、取消任务、丢失焦点。结构性 if 分支也影响身份，因此调整结构时要观察输入框和任务是否重建。</p><pre><code class=\"language-swift\">StudyDetailView(item: item) {\n    editor = EditorRequest(item: item)\n}\n.id(item.id) // 仅在选择另一条数据时重建详情局部状态。</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "复现并避免“搜索后删除错条目”。",
+      "steps": [
+        "依次创建 Swift、SwiftUI、Testing 三条记录。",
+        "搜索 SwiftUI，删除当前唯一可见项。",
+        "清空搜索，确认 Swift 和 Testing 仍存在；编辑 Swift 标题后确认 ID 未改变。"
+      ],
+      "expected": "仅 SwiftUI 被删除，其余两条保留；标题修改不会生成新的模型 ID。",
+      "solution": "<p>保留 visibleItems 的偏移映射。可在断点观察目标 ID，或为 StudyWriter.delete 增加使用特定模型数组的测试；不要用原始 items[offset]。</p><pre><code class=\"language-swift\">let targets = offsets.map { visibleItems[$0] }\ntry StudyWriter.delete(targets, in: context)</code></pre>"
+    },
+    "quiz": {
+      "question": "每次 body 求值生成新的 UUID 作为 ForEach 身份，可以让状态更稳定。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "动态生成身份会告诉框架元素已被替换，破坏原本应保持的状态。"
+    },
+    "retrieval": [
+      "为什么可编辑标题不适合作为条目身份？",
+      "隐藏一些行后，onDelete 的偏移量对应哪个集合？"
+    ],
+    "sources": [
+      {
+        "title": "ForEach",
+        "url": "https://developer.apple.com/documentation/swiftui/foreach"
+      },
+      {
+        "title": "State",
+        "url": "https://developer.apple.com/documentation/swiftui/state"
+      }
+    ],
+    "lab": {
+      "label": "NativeStudy · StudyListView.swift",
+      "path": "examples/NativeStudy/Sources/StudyListView.swift",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj；选择 NativeStudy-macOS → My Mac → ⌘R（iOS 选择 NativeStudy-iOS 和模拟器）。"
+    },
+    "pitfalls": [
+      "不要用随机 ID 强制刷新整棵视图。",
+      "不要把筛选结果的索引当成原始数据的索引。"
+    ],
+    "next": 30
+  },
+  {
+    "id": 30,
+    "slug": "typed-navigation",
+    "title": "导航：以数据描述目标和路径",
+    "module": "SwiftUI",
+    "minutes": 30,
+    "prerequisites": [
+      29
+    ],
+    "objective": "在详情中增加一个有类型的练习目标，并验证分栏与窄屏返回行为。",
+    "summary": "原生导航不只是一条 URL：窗口、分栏选择、压栈路径和模态编辑分别有自己的状态。",
+    "sections": [
+      {
+        "title": "导航目标用值表示",
+        "html": "<p>NavigationLink(value:) 发出一个 Hashable 值，navigationDestination(for:) 将该类型映射到具体界面。示例 DetailRoute 使用 enum 表达 layoutWorkshop 与 nativeBridge，比散落的字符串路由容易维护。目标注册要处于对应 NavigationStack 内；不要在临时、惰性列表行里注册全局目标，否则框架可能无法稳定发现它。导航数据应轻量，通常用稳定 ID，而不是把复杂可变对象塞满路径。</p><pre><code class=\"language-swift\">enum DetailRoute: Hashable {\n    case layoutWorkshop\n    case nativeBridge\n}\nNavigationLink(&quot;Layout workshop&quot;, value: DetailRoute.layoutWorkshop)\n// 在栈内的稳定位置注册：\n.navigationDestination(for: DetailRoute.self) { route in\n    switch route {\n    case .layoutWorkshop: LayoutWorkshopView()\n    case .nativeBridge: NativeBridgeWorkshopView()\n    }\n}</code></pre>"
+      },
+      {
+        "title": "路径状态和模态状态有不同用途",
+        "html": "<p>需要程序化返回或深链时，使用 @State var path: [Route] 并传给 NavigationStack(path:)；append 表示前进，removeLast 表示后退。sheet 则用于编辑等独立任务，取消意味着结束该模态任务，不应顺便改变导航路径。NativeStudy 的主详情由 selection 决定，详情中的实验室用栈导航，编辑器用 sheet。这三种状态各自对应一个清楚的用户动作。</p><pre><code class=\"language-swift\">@State private var path: [DetailRoute] = []\n// 练习：替换详情列中的 NavigationStack 为受控版本。\nNavigationStack(path: $path) {\n    // 在栈内注册 navigationDestination 后：\n    Button(&quot;布局练习&quot;) { path.append(.layoutWorkshop) }\n}</code></pre>"
+      },
+      {
+        "title": "同一数据模型，平台导航表现可以不同",
+        "html": "<p>NavigationSplitView 适合侧边栏加详情；宽屏 iPad 和 macOS 可以同时显示两列，iPhone 等窄空间会折叠为栈。列表 selection 需要匹配 NavigationLink 的值类型。不要只在 Mac 编译成功就声称 iPhone 返回手势已验证；至少在两种布局下运行选择、进入实验室、返回、删除当前项。选择被删除或筛掉后，显示明确的空详情，而非访问已失效模型。</p><pre><code class=\"language-swift\">NavigationSplitView {\n    List(selection: $selection) {\n        ForEach(visibleItems) { item in\n            NavigationLink(value: item.id) { StudyRow(item: item) }\n        }\n    }\n} detail: {\n    NavigationStack { /* 当前选择的详情 */ }\n}</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "为详情增加一个“回忆练习”目标，使用枚举 case 注册，并在 iPhone 与 Mac 上走完返回流程。",
+      "steps": [
+        "DetailRoute 增加 recall case。",
+        "在 Workshops 区添加 NavigationLink，并在 switch 中添加 Text 或独立 RecallView。",
+        "分别在 Mac 窗口和 iPhone 模拟器选择条目、进入练习、返回详情和列表。"
+      ],
+      "expected": "新目标无需字符串拼接；返回层级清楚；窄屏不会把编辑取消当成导航后退。",
+      "solution": "<p>给现有 DetailRoute 增加 case recall，再为该 case 返回一个独立视图。若要程序化导航才进一步引入 path，避免同时维护两套真相。</p><pre><code class=\"language-swift\">case .recall:\n    Text(&quot;不看笔记解释 State 与 Binding 的区别&quot;)\n        .padding()\n        .navigationTitle(&quot;回忆练习&quot;)</code></pre>"
+    },
+    "quiz": {
+      "question": "NavigationSplitView 可根据可用空间把分栏折叠为紧凑导航。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "平台和窗口尺寸会影响呈现；不能假定永远两列并排。"
+    },
+    "retrieval": [
+      "为什么 Route 常用 Hashable 的 enum 或稳定 ID？",
+      "selection、path 与 sheet 状态分别代表什么？"
+    ],
+    "sources": [
+      {
+        "title": "NavigationStack",
+        "url": "https://developer.apple.com/documentation/swiftui/navigationstack"
+      },
+      {
+        "title": "NavigationSplitView",
+        "url": "https://developer.apple.com/documentation/swiftui/navigationsplitview"
+      }
+    ],
+    "lab": {
+      "label": "NativeStudy · StudyDetailView.swift",
+      "path": "examples/NativeStudy/Sources/StudyDetailView.swift",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj；选择 NativeStudy-macOS → My Mac → ⌘R（iOS 选择 NativeStudy-iOS 和模拟器）。"
+    },
+    "pitfalls": [
+      "不要把模态编辑和压栈导航合并成同一个布尔值。",
+      "不要只按 Mac 窗口表现推断 iPhone 导航正确。"
+    ],
+    "next": 31
+  },
+  {
+    "id": 31,
+    "slug": "forms-validation-focus",
+    "title": "表单：验证、草稿与键盘焦点",
+    "module": "SwiftUI",
+    "minutes": 30,
+    "prerequisites": [
+      30
+    ],
+    "objective": "实现“合法才保存、失败保留草稿、取消不污染模型”的编辑体验。",
+    "summary": "表单是数据约束、交互反馈和原生输入系统相遇的地方；视觉上的 disabled 不能代替写入边界验证。",
+    "sections": [
+      {
+        "title": "验证规则应成为可测试的逻辑",
+        "html": "<p>StudyDraft.normalizedTitle 去除首尾空白，isValid 检查 1 至 80 个 Swift Character。String.count 不是 UTF-8 字节数，也不能随意替换为 JavaScript UTF-16 长度。按钮 disabled 改善用户体验，但 StudyWriter.save 仍必须 guard 验证，因为其他调用入口可能绕过 UI。此处只清理标题，不擅自截断用户笔记，避免保存时无声丢失内容。</p><pre><code class=\"language-swift\">struct StudyDraft: Equatable, Sendable {\n    var title = &quot;&quot;\n    var notes = &quot;&quot;\n    var normalizedTitle: String {\n        title.trimmingCharacters(in: .whitespacesAndNewlines)\n    }\n    var isValid: Bool { (1...80).contains(normalizedTitle.count) }\n}</code></pre>"
+      },
+      {
+        "title": "焦点是一份明确的交互状态",
+        "html": "<p>@FocusState 表达哪个字段持有焦点；单字段可用 Bool，多字段用可选 enum 更清楚。focused 把原生焦点系统与状态连接，设为 false 或 nil 可解除焦点。不要靠多次延时强抢焦点掩盖生命周期问题；示例在表单 .task 中请求初始焦点。submitLabel 只描述键盘操作含义，onSubmit 才承接事件，保存前仍检查有效性。</p><pre><code class=\"language-swift\">@FocusState private var titleIsFocused: Bool\nTextField(&quot;Title&quot;, text: $draft.title, axis: .vertical)\n    .focused($titleIsFocused)\n    .submitLabel(.done)\n    .onSubmit { if draft.isValid { save() } }\n// 表单容器：.task { titleIsFocused = true }</code></pre>"
+      },
+      {
+        "title": "成功才结束编辑，失败提供重试机会",
+        "html": "<p>保存先调用 writer，再通知父视图选择新记录，最后 dismiss。顺序很重要：若先关 sheet 再异步发现失败，用户可能丢失草稿且不知道发生什么。错误用可读提示展示，草稿留在 State 里方便修正或重试。macOS 为默认操作和取消绑定系统快捷键；iOS 验证软键盘遮挡、长笔记滚动与中文组合输入。不要把所有平台的输入问题都归结为布局高度。</p><pre><code class=\"language-swift\">private func save() {\n    do {\n        let saved = try StudyWriter.save(draft, editing: item, in: context)\n        onSave(saved.id)\n        dismiss() // 成功提交后才结束模态任务。\n    } catch {\n        errorMessage = error.localizedDescription\n    }\n}</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "验证表单的边界输入与取消行为，并扩展为标题、笔记两个焦点。",
+      "steps": [
+        "输入纯空格、80 个 emoji、81 个 emoji，观察保存按钮。",
+        "在 Tests/NativeStudyTests.swift 找到对应边界测试并运行 ⌘U。",
+        "将 Bool 焦点改成 enum Field?，给标题和笔记不同 case，避免多个控件绑定同一焦点值。"
+      ],
+      "expected": "纯空白与 81 字符标题不可提交；80 个复合 emoji 可提交；焦点切换不会丢失草稿。",
+      "solution": "<p>输入验证与焦点是两套独立逻辑，先保留 StudyDraft 测试，再扩展 UI。</p><pre><code class=\"language-swift\">enum Field: Hashable { case title, notes }\n@FocusState private var focusedField: Field?\n// 标题 .focused($focusedField, equals: .title)\n// 笔记 .focused($focusedField, equals: .notes)\n// 解除焦点：focusedField = nil</code></pre>"
+    },
+    "quiz": {
+      "question": "只要保存按钮被禁用，数据写入方法就不需要再次验证。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "按钮属于界面反馈，写入方法仍是数据约束边界。"
+    },
+    "retrieval": [
+      "为什么不能将 emoji 的 UTF-8 字节数当作字符数？",
+      "保存失败时应保留哪些状态，什么时候可以 dismiss？"
+    ],
+    "sources": [
+      {
+        "title": "FocusState",
+        "url": "https://developer.apple.com/documentation/swiftui/focusstate"
+      },
+      {
+        "title": "Binding",
+        "url": "https://developer.apple.com/documentation/swiftui/binding"
+      }
+    ],
+    "lab": {
+      "label": "NativeStudy · StudyEditorView.swift",
+      "path": "examples/NativeStudy/Sources/StudyEditorView.swift",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj；选择 NativeStudy-macOS → My Mac → ⌘R（iOS 选择 NativeStudy-iOS 和模拟器）。"
+    },
+    "pitfalls": [
+      "不要用多个控件共享同一个焦点 enum 值。",
+      "不要在保存成功之前关闭编辑器。"
+    ],
+    "next": 32
+  },
+  {
+    "id": 32,
+    "slug": "view-tasks-and-cancellation",
+    "title": "视图任务：加载、取消与过期结果",
+    "module": "SwiftUI",
+    "minutes": 30,
+    "prerequisites": [
+      31
+    ],
+    "objective": "用 task(id:) 加载条目资源，并阻止旧请求覆盖新页面。",
+    "summary": "本课使用明确标注的离线 fixture，专注异步生命周期；真实 URLSession 与传输校验在工程章节展开。",
+    "sections": [
+      {
+        "title": "任务身份决定何时重新加载",
+        "html": "<p>task(id:) 将任务与视图生命周期和某个 Equatable 值连接。值改变会取消原任务并创建新任务；视图离开后框架也会取消关联任务。本例 ResourceRequest 包含标题、失败开关和重试计数，所以编辑主题、修改设置或点重试都能发起新加载。不要在 body 里写 Task，也不要因为 body 重新求值就认为需要重新请求。较新 SDK 文档给 task 增加了诊断参数，本课程只使用部署基线已有的 id 调用方式。</p><pre><code class=\"language-swift\">.task(id: ResourceRequest(\n    topic: item.title,\n    shouldFail: preferences.simulateResourceFailure,\n    retry: retry\n)) {\n    await loader.load(topic: item.title,\n                      shouldFail: preferences.simulateResourceFailure)\n}</code></pre>"
+      },
+      {
+        "title": "取消是合作协议，await 后重新检查",
+        "html": "<p>取消不是强行终止线程。Task.sleep 和许多异步 API 会响应取消，但业务代码仍应在关键点检查 Task.checkCancellation。ResourceLoader 同时保存 generation：请求开始时取快照，返回后只允许当前代次更新状态。这样即便将来接入不及时响应取消的服务，旧结果也无法覆盖新请求。检查的对象是当前需求，而不只是网络回来了没有。UI 模型仍在 MainActor，await 挂起让出执行机会。</p><pre><code class=\"language-swift\">guard !Task.isCancelled else { return } // 尚未开始的旧任务也要忽略。\ngeneration += 1\nlet request = generation\nstate = .loading\nlet resources = try await service.fetch(for: topic, shouldFail: shouldFail)\ntry Task.checkCancellation()\nguard request == generation else { return }\nstate = .loaded(resources)</code></pre>"
+      },
+      {
+        "title": "状态机让界面互斥，错误与取消区别对待",
+        "html": "<p>idle、loading、loaded、failed 使用 enum 表达，不再维护 isLoading、hasError、items 等可能互相矛盾的标志组合。CancellationError 不弹失败提示，因为用户切换条目不是业务故障；真实错误才进入 failed(message)，并提供 Retry。示例延迟固定、数据固定且不用网络，因此可以稳定测试成功、失败、取消。真实网络接入后仍需额外验证 HTTP 状态、解码和超时，不能把 fixture 测试说成网络测试。</p><pre><code class=\"language-swift\">enum State: Equatable {\n    case idle, loading\n    case loaded([ReadingResource])\n    case failed(String)\n}\n// catch is CancellationError { ... }\n// catch { state = .failed(error.localizedDescription) }</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "打开模拟失败开关，观察失败与重试，再验证快速切换不出现过期资源。",
+      "steps": [
+        "创建 Swift 与 SwiftUI 两条记录，选择它们查看固定文档资源。",
+        "设置中打开 Simulate resource failure，确认失败提示；关闭后重试。",
+        "运行 ResourceLoaderTests；把延迟临时改为两秒，快速切换条目，完成后还原。"
+      ],
+      "expected": "失败明确可见；切换条目不会把取消当错误；SwiftUI 条目最终显示 SwiftUI 文档资源。",
+      "solution": "<p>两个防线要同时保留：取消检查避免已取消任务提交，generation 避免较早但未及时取消的请求覆盖较新状态。</p><pre><code class=\"language-swift\">catch is CancellationError {\n    if request == generation { state = .idle }\n} catch {\n    guard request == generation, !Task.isCancelled else { return }\n    state = .failed(error.localizedDescription)\n}</code></pre><p>单元测试通过受控 actor 等待每次请求真正进入服务，再按逆序返回；不要把一次 Task.yield 当成另一任务已经开始的保证。</p>"
+    },
+    "quiz": {
+      "question": "task(id:) 会请求取消旧任务，但业务代码仍需合作处理取消。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "取消是一种信号，不能假定所有服务都立即停止执行。"
+    },
+    "retrieval": [
+      "为什么需要 generation 而不仅是 MainActor？",
+      "为什么取消不应显示成“资源加载失败”？"
+    ],
+    "sources": [
+      {
+        "title": "View task with identity",
+        "url": "https://developer.apple.com/documentation/swiftui/view/task(id:name:priority:file:line:_:)"
+      },
+      {
+        "title": "Task cancellation",
+        "url": "https://developer.apple.com/documentation/swift/task"
+      }
+    ],
+    "lab": {
+      "label": "NativeStudy · ResourceLoader.swift",
+      "path": "examples/NativeStudy/Sources/ResourceLoader.swift",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj；选择 NativeStudy-macOS → My Mac → ⌘R（iOS 选择 NativeStudy-iOS 和模拟器）。"
+    },
+    "pitfalls": [
+      "MainActor 防止同时访问隔离状态，不会自动保证返回顺序符合业务需求。",
+      "不要把离线 fixture 的成功误报为真实网络验证。"
+    ],
+    "next": 33
+  },
+  {
+    "id": 33,
+    "slug": "swiftdata-persistence",
+    "title": "SwiftData：模型、查询和保存失败",
+    "module": "SwiftUI",
+    "minutes": 30,
+    "prerequisites": [
+      32
+    ],
+    "objective": "完成学习条目的增删改查，并解释显式保存与内存预览的边界。",
+    "summary": "SwiftData 负责持久化和对象追踪，不是浏览器 localStorage 的语法替换；模型、容器、context 与查询各有职责。",
+    "sections": [
+      {
+        "title": "Model 描述结构，Container 配置存储",
+        "html": "<p>@Model 将类变成 SwiftData 可追踪模型；@Attribute(.unique) 给 id 添加唯一约束。ModelContainer 根据模型类型建立 schema 并配置底层存储。NativeStudy 禁用 CloudKit，使用本地持久库，不需要开发者账户或网络。初始化可能失败，示例显示存储错误而不是删除现有文件或偷偷切换内存库。模型结构演进要设计迁移，不能把“改了属性还能编译”当作兼容旧数据库的证明。</p><pre><code class=\"language-swift\">@Model\nfinal class StudyItem {\n    @Attribute(.unique) var id: UUID\n    var title: String\n    var notes: String\n    var isCompleted: Bool\n    var createdAt: Date\n    // 完整初始化器见 StudyItem.swift。\n}</code></pre>"
+      },
+      {
+        "title": "Context 管理改动，Query 为界面取数据",
+        "html": "<p>@Environment(\\.modelContext) 取得由上层容器提供的 context；@Query(sort:) 获取排序结果并随模型变化刷新界面。插入、属性修改、删除都先发生在 context 的追踪范围内。示例关闭 autosave，要求每个明确的用户动作显式 try save；这使成功与错误反馈更容易教学和验证。实际工程可以选择自动保存，但不能因此忽略错误、事务边界或用户以为已经保存的时点。</p><pre><code class=\"language-swift\">@Environment(\\.modelContext) private var context\n@Query(sort: \\StudyItem.createdAt, order: .reverse)\nprivate var items: [StudyItem]\n\nlet item = StudyItem(title: &quot;SwiftData&quot;)\ncontext.insert(item)\nif context.hasChanges { try context.save() }</code></pre>"
+      },
+      {
+        "title": "保存失败回滚，预览和测试使用独立存储",
+        "html": "<p>StudyWriter 捕获保存错误后 rollback，再把错误抛给 UI。该回滚影响 context 内全部未提交改动，因此示例坚持 UI 只编辑草稿、保存操作同步完成；复杂协作编辑需要更细的 context 边界。预览用 isStoredInMemoryOnly，避免在看界面时污染真实学习记录；单元测试也用独立容器。Model 对象不要跨 actor 随意传递，跨边界传稳定 ID 或 Sendable 快照，后台数据库工作另行设计隔离。</p><pre><code class=\"language-swift\">do {\n    if context.hasChanges { try context.save() }\n} catch {\n    context.rollback()\n    throw error\n}\n// Preview / tests:\nlet config = ModelConfiguration(isStoredInMemoryOnly: true,\n                                cloudKitDatabase: .none)\nlet container = try ModelContainer(for: StudyItem.self,\n                                   configurations: config)</code></pre><p>编辑器打开期间，另一窗口可能删除该条目。保存还要验证原对象仍属于当前 context 且未被删除；否则应报错并保留草稿，不能跳过 save 却通知用户成功。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "验证持久数据跨启动保留，而 Preview 数据不会进入运行中的数据库。",
+      "steps": [
+        "在真实运行的 App 新增一条“持久化验收”，退出进程后重开。",
+        "打开 StudyListView 的 Seeded in-memory data 预览，观察种子记录。",
+        "运行 lifecycle 测试，阅读 fresh ModelContext 如何确认已保存的字段。"
+      ],
+      "expected": "真实 App 重开后保留条目；内存预览的种子条目没有写入真实库；增删改查测试通过。",
+      "solution": "<p>容器配置决定落盘还是内存，context 决定当前追踪与提交范围。重开真实应用验证跨进程保留，单元测试中 fresh context 验证的是容器内提交可见性，两类证据不要混淆。</p><pre><code class=\"language-swift\">let reader = ModelContext(container)\nlet saved = try reader.fetch(FetchDescriptor&lt;StudyItem&gt;())\n// 比对 id、title、notes 和 isCompleted，而非只断言数组非空。</code></pre>"
+    },
+    "quiz": {
+      "question": "为预览设置 isStoredInMemoryOnly，可以避免预览种子数据写入真实学习库。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "内存容器与持久容器独立，适合界面预览及测试隔离。"
+    },
+    "retrieval": [
+      "Model、ModelContainer、ModelContext、Query 各解决什么问题？",
+      "为什么在共享 context 中 rollback 前要明确其影响范围？"
+    ],
+    "sources": [
+      {
+        "title": "Preserving model data across launches",
+        "url": "https://developer.apple.com/documentation/swiftdata/preserving-your-apps-model-data-across-launches"
+      },
+      {
+        "title": "ModelContext.save",
+        "url": "https://developer.apple.com/documentation/swiftdata/modelcontext/save()"
+      }
+    ],
+    "lab": {
+      "label": "NativeStudy · StudyItem.swift",
+      "path": "examples/NativeStudy/Sources/StudyItem.swift",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj；选择 NativeStudy-macOS → My Mac → ⌘R（iOS 选择 NativeStudy-iOS 和模拟器）。"
+    },
+    "pitfalls": [
+      "不要用 try? save 假装提交成功。",
+      "不要为“修复”初始化错误自动清空用户数据库。"
+    ],
+    "next": 34
+  },
+  {
+    "id": 34,
+    "slug": "accessible-localized-animation",
+    "title": "动画、无障碍与本地化",
+    "module": "SwiftUI",
+    "minutes": 30,
+    "prerequisites": [
+      33
+    ],
+    "objective": "让学习条目在大字号、VoiceOver、减少动态效果和两种语言下仍可使用。",
+    "summary": "原生体验不只来自外观。能理解状态、能完成任务、能适应个人设置，是界面功能的一部分。",
+    "sections": [
+      {
+        "title": "动画描述状态变化，尊重减少动态效果",
+        "html": "<p>SwiftUI 在状态变化前后插值，withAnimation 表达一次操作的过渡，animation(_:value:) 针对指定值触发。不要用一个覆盖整个根视图的隐式动画让所有输入和加载状态都跟着移动。示例切换完成状态时读取 accessibilityReduceMotion，若开启便不使用该动画；完成信息还通过文字和图标表达，不能只靠绿色。减少动态效果不仅是速度更快，而是避免不必要的大幅位移。</p><pre><code class=\"language-swift\">@Environment(\\.accessibilityReduceMotion) private var reduceMotion\n// 明确限制到这次状态切换。\ntry withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {\n    try StudyWriter.toggle(item, in: context)\n}</code></pre>"
+      },
+      {
+        "title": "给控件语义，并承受字号变化",
+        "html": "<p>系统 Button、Toggle、TextField 已有基础语义，优先复用它们。图标需要可理解的 label；纯装饰图标可以隐藏，真正表达完成状态的图标则提供状态文字。StudyRow 将图标、标题、时间合并为一个可读元素，减少无意义的重复停靠，但不要把多个独立按钮错误合并成一个不可操作区域。语义字体和多行布局允许较大字号；VoiceOver 阅读顺序、操作命名和键盘焦点必须实际体验。</p><pre><code class=\"language-swift\">Image(systemName: item.isCompleted ? &quot;checkmark.circle.fill&quot; : &quot;circle&quot;)\n    .accessibilityLabel(item.isCompleted ? Text(&quot;Completed&quot;) : Text(&quot;In progress&quot;))\n// 行容器只组合展示信息，按钮仍应保留自己的动作。\n.accessibilityElement(children: .combine)</code></pre>"
+      },
+      {
+        "title": "界面文案翻译，用户内容保留原样",
+        "html": "<p>示例 Localizable.xcstrings 保存英文和简体中文文案。Text 的字符串字面量通常走本地化查找，用户输入的 item.title 是动态 String，应原样呈现。错误消息在非 View 代码中用 String(localized:)；日期用 format API 随 locale 适配。不要用拼接句子和手写月日顺序替代格式化，也不要将用户标题误当本地化 key。新增文案时同步目录并测试较长翻译，语言切换可能暴露布局问题。</p><pre><code class=\"language-swift\">Text(&quot;Study details&quot;) // UI 字面量：目录中的翻译键。\nText(item.title)       // 用户内容：直接展示。\nText(item.createdAt, format: .dateTime.month().day())\nlet message = String(localized: &quot;Unable to save&quot;)</code></pre>"
+      }
+    ],
+    "exercise": {
+      "prompt": "进行一次包含无障碍和本地化的功能验收。",
+      "steps": [
+        "在 Xcode Scheme → Run → Options 设置 App Language 为简体中文，再切换英文。",
+        "使用 macOS VoiceOver（⌘F5）或模拟器 Accessibility Inspector 检查列表行和操作名称。",
+        "开启系统 Reduce Motion，增大文字尺寸，并在窄屏完成新增、编辑、保存。"
+      ],
+      "expected": "中文英文文案可用；用户原始内容不被翻译；完成状态不依赖颜色；大字号下仍能访问保存与取消。",
+      "solution": "<p>逐项记录实测平台和结果。可以在 Preview 使用 locale 与 dynamicTypeSize 做视觉检查，但 Preview 通过不代表真实 VoiceOver 或键盘导航已验收。</p><pre><code class=\"language-swift\">StudyListView()\n    .environment(StudyPreferences())\n    .modelContainer(container)\n    .environment(\\.locale, Locale(identifier: &quot;zh-Hans&quot;))\n    .environment(\\.dynamicTypeSize, .accessibility3)</code></pre>"
+    },
+    "quiz": {
+      "question": "只用绿色表示完成状态，足以覆盖所有用户的感知需要。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "颜色无法单独承担语义，应同时提供文字或形状与可访问名称。"
+    },
+    "retrieval": [
+      "动态 String 与字符串字面量在 Text 的本地化行为上有何差别？",
+      "为什么编译通过不能代替 VoiceOver 和大字号验收？"
+    ],
+    "sources": [
+      {
+        "title": "animation(_:value:)",
+        "url": "https://developer.apple.com/documentation/swiftui/view/animation(_:value:)"
+      },
+      {
+        "title": "Reduce Motion",
+        "url": "https://developer.apple.com/documentation/swiftui/environmentvalues/accessibilityreducemotion"
+      },
+      {
+        "title": "Accessibility element children",
+        "url": "https://developer.apple.com/documentation/swiftui/view/accessibilityelement(children:)"
+      },
+      {
+        "title": "LocalizedStringKey",
+        "url": "https://developer.apple.com/documentation/swiftui/localizedstringkey"
+      }
+    ],
+    "lab": {
+      "label": "NativeStudy · StudyDetailView.swift",
+      "path": "examples/NativeStudy/Sources/StudyDetailView.swift",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj；选择 NativeStudy-macOS → My Mac → ⌘R（iOS 选择 NativeStudy-iOS 和模拟器）。"
+    },
+    "pitfalls": [
+      "不要把颜色当成唯一信息通道。",
+      "不要把 Preview 注入环境等同于真实辅助技术验证。"
+    ],
+    "next": 35
+  }
+]

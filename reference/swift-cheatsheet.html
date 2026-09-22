@@ -1,0 +1,42 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Swift 语法速查 · Swift Native Lab</title><link rel="stylesheet" href="../assets/course.css"></head><body><a class="skip" href="#main">跳到正文</a><header class="site-header"><a class="brand" href="../index.html">SWIFT / NATIVE LAB</a><nav class="header-links" aria-label="全站导航"><a href="../index.html#curriculum">课程地图</a><a href="../index.html#references">所有速查</a></nav></header><main id="main" class="page reference"><div class="eyebrow">FIELD NOTES / 可打印速查</div><h1>Swift 语法速查</h1><p class="lede">先让编译器帮你表达约束，再追求简短写法。</p><h2 id="basics">绑定、类型与 Optional</h2><pre><code>let name: String = "Swift"
+var minutes = 25
+let ratio = Double(2) / Double(5) // 0.4，避免整数除法
+let raw: String? = "25"
+func parse(_ text: String?) -&gt; Int? {
+    guard let text, let value = Int(text), value &gt; 0 else { return nil }
+    return value
+}
+let fallback = parse(raw) ?? 10 // nil 才使用默认值</code></pre>
+<h2 id="functions">函数、闭包与集合</h2><pre><code>func label(for title: String, minutes: Int = 25) -&gt; String {
+    "\(title)：\(minutes) 分钟" // 单表达式函数可省略 return
+}
+let values = [1, 2, 3, 4]
+let result = values.filter { $0.isMultiple(of: 2) }.map { $0 * 10 }
+// 结果 [20, 40]；数组越界不会返回 undefined，而是运行时错误。</code></pre>
+<h2 id="types">用类型表达数据状态</h2><pre><code>struct Session: Equatable, Sendable {
+    let title: String
+    var completed = false
+    mutating func finish() { completed = true }
+}
+enum LoadState&lt;Value&gt; {
+    case idle
+    case loading
+    case loaded(Value)
+    case failed(String)
+}
+protocol Named { var title: String { get } }
+func describe&lt;T: Named&gt;(_ value: T) -&gt; String { value.title }</code></pre>
+<div class="table-scroll"><table><thead><tr><th>选择</th><th>适用情境</th><th>注意</th></tr></thead><tbody><tr><td>struct</td><td>独立值、业务模型、传输数据</td><td>值内的 class 属性仍可能共享。</td></tr><tr><td>class</td><td>身份、共享生命周期、继承或观察模型</td><td>ARC 引用环需分析；默认可变共享不跨并发边界。</td></tr><tr><td>enum + 关联值</td><td>互斥状态、路由、明确错误</td><td>用 switch 穷尽处理，别让无效组合成为可能。</td></tr><tr><td>some P</td><td>隐藏但固定的具体返回类型</td><td>不同返回分支不能任意换具体类型。</td></tr><tr><td>any P</td><td>运行时装入不同符合协议的类型</td><td>存在类型的操作能力受协议约束限制。</td></tr></tbody></table></div>
+<h2 id="errors">错误和清理</h2><pre><code>enum ValidationError: Error { case emptyTitle }
+func validate(_ title: String) throws -&gt; String {
+    guard !title.isEmpty else { throw ValidationError.emptyTitle }
+    return title
+}
+do {
+    print(try validate("Swift"))
+} catch {
+    print("校验失败：\(error)")
+}
+// try? 会把失败折为 nil，适合允许丢失错误细节的地方。
+// defer 在当前作用域退出时执行；不保证进程被杀后还能执行。</code></pre>
+<p>常见陷阱：String 不能直接按 Int 下标；整数不会自动变 Double；let class 仍可改 var 属性；public 类型的成员不自动 public；函数参数默认不可重新赋值；inout 访问要求独占。</p><p>回看 <a href="../index.html#curriculum">第 02–14 课</a>。资料：<a href="https://www.swift.org/documentation/api-design-guidelines/">API Design Guidelines</a>、<a href="https://docs.swift.org/swift-book/documentation/the-swift-programming-language/">Swift Language Guide 各章</a>。</p><p class="source-note">官方资料核对 2026-09-22；内容是课程摘要，API 版本以链接文档为准。使用浏览器打印可生成 PDF。</p></main><footer class="footer">Swift Native Lab · 有疑问时带着代码和预测结果向 Codex 提问。</footer></body></html>

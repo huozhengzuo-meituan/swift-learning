@@ -1,0 +1,707 @@
+[
+  {
+    "id": 35,
+    "slug": "architecture-and-dependencies",
+    "title": "让业务规则离开 View",
+    "module": "原生工程实践",
+    "minutes": 30,
+    "prerequisites": [
+      34
+    ],
+    "objective": "画出一条“输入 → 校验 → 保存 → 呈现错误”的依赖路径，并替换一个依赖。",
+    "summary": "不必先选择架构缩写。先回答：谁拥有状态，谁实施规则，谁触发不可逆的操作？",
+    "sections": [
+      {
+        "title": "从一个失败场景开始划分职责",
+        "html": "<p>设想用户输入三个空格后点击保存。如果只有按钮的 disabled 判断，别的调用入口仍能写入空标题。把“标题必须有可见字符”放入独立规则后，视图负责提示，保存入口仍负责拒绝。界面是交互适配层，不能成为唯一的数据防线。</p><p>NativeStudy 的 StudyEditorView 保存草稿；StudyItem 与保存逻辑表达数据约束；ResourceLoader 承担异步资源状态。先读代码中的调用方向，再决定是否抽 protocol。项目规模小时，一个清晰函数通常比五层空壳更好。</p>"
+      },
+      {
+        "title": "依赖注入是把选择放到边界",
+        "html": "<p>第 22 课的 HTTP transport 可用固定响应替换。核心逻辑只依赖“能取得响应”这个能力，测试不依赖外网。你可以从普通初始化参数开始注入，不必引入 DI 容器。对 SwiftData 小项目，直接在边界使用 ModelContext 也是合理选择；无需为每个类型创建 Repository。</p><pre><code>struct TitlePolicy {\n    static func normalize(_ input: String) -&gt; String {\n        input.trimmingCharacters(in: .whitespacesAndNewlines)\n    }\n}\n// Foundation 中的 String 工具。调用方先标准化，再做空值/长度校验。</code></pre><p>依赖有不同生命周期：一次操作、一个页面、一个窗口、整个应用。把所有东西放在环境里会隐藏这些差异。环境传入的依赖需要在 Preview 中同样提供，否则预览可能缺少运行条件。</p>"
+      },
+      {
+        "title": "数据流能解释，架构才有价值",
+        "html": "<p>画一条真实路径：编辑标题 → 草稿变化 → 保存按钮 → 校验 → ModelContext 保存 → 成功关闭 / 失败展示。标出 MainActor 和持久化边界。共享偏好在 App 中创建，窗口状态留在窗口；这能解释为什么开两个窗口时有些值共享，有些不共享。</p><p>一个可维护的设计应能回答“离开页面是否取消请求”“存储失败是否保留草稿”“列表和详情是否指向同一实体”。为这些问题加测试，比争论 MVVM 与 MVC 名称更能检验你的理解。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "给空白标题规则找到唯一的执行入口",
+      "steps": [
+        "运行 NativeStudy，输入空白标题并观察。",
+        "读 StudyItem、StudyEditorView 和测试文件，画出保存调用路径。",
+        "增加一条带首尾空格但中间有效的标题用例；确认标准化之后保存。"
+      ],
+      "expected": "空白输入不会插入记录；有效标题去掉外围空白后保存；即使绕过按钮调用保存逻辑，约束仍成立。",
+      "solution": "<p>让保存操作先取得标准化结果，统一校验，再修改模型并保存。UI 可以提前禁用按钮帮助用户，但仍在操作边界校验。测试直接调用规则/操作，而非只检查 disabled 的布尔表达式。失败时不要先清空草稿。</p>"
+    },
+    "quiz": {
+      "question": "抽象应围绕业务边界与替换需求设计，而非给每个 View 固定加层。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "先把规则、状态所有者与副作用边界说明白，再引入真正需要的协议或服务。"
+    },
+    "retrieval": [
+      "为什么 UI 校验不能代替保存入口校验？",
+      "如果离开页面后请求还在进行，哪个对象应该负责取消？"
+    ],
+    "sources": [
+      {
+        "title": "Managing model data in your app",
+        "url": "https://developer.apple.com/documentation/swiftui/managing-model-data-in-your-app"
+      },
+      {
+        "title": "ModelContext",
+        "url": "https://developer.apple.com/documentation/swiftdata/modelcontext"
+      }
+    ],
+    "pitfalls": [
+      "不要把 React 的全局 store 习惯直接套到所有原生页面。",
+      "@Observable 提供观察能力，不会自动提供网络、事务或并发隔离。"
+    ],
+    "lab": {
+      "label": "NativeStudy 完整项目与运行说明",
+      "path": "examples/NativeStudy/README.md",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj\n# 选择 NativeStudy-macOS + My Mac，或 NativeStudy-iOS + iPhone 模拟器，再按 ⌘R"
+    }
+  },
+  {
+    "id": 36,
+    "slug": "behavioral-and-ui-testing",
+    "title": "用测试描述用户能依赖的行为",
+    "module": "原生工程实践",
+    "minutes": 30,
+    "prerequisites": [
+      35
+    ],
+    "objective": "为同一功能选择合适的单元、集成和界面验收，并写出失败路径。",
+    "summary": "测试最有价值的部分，是证明错误输入、取消和重启等情境下用户仍能依赖应用。",
+    "sections": [
+      {
+        "title": "测试层次由证据决定",
+        "html": "<p>标题校验适合纯函数测试；SwiftData 保存后能否重新读取适合集成测试；用户是否能打开编辑页并保存适合 UI 测试。同一断言不必在每层重复。Swift Testing 用于现代单元/集成测试；XCTest 与 XCUIAutomation 承担 UI 自动化。它们可以存在同一工程，不要在同一个测试函数中混用断言体系。</p><p>读 NativeStudy 的测试：新 ModelContext 读取能证明持久化到该测试存储，而同一对象上刚改的属性只能证明内存赋值。测试中使用内存容器是为了隔离用户数据，不等价于证明磁盘迁移。</p>"
+      },
+      {
+        "title": "测试输入应该击中边界",
+        "html": "<p>不要只测“Swift”这个正常标题。加入空字符串、空格、emoji、临界长度和超长字符；文字长度是 Character 语义，不能照搬 UTF-16 下标。异步测试使用固定输入和控制时序的方法，避免用随意 sleep 等待一个“应该已完成”的事件。</p><pre><code>import Testing\n\n@Test(\"标题可以包含中文与组合字符\")\nfunc titleCharacters() {\n    let title = \"学习👩🏽‍💻\"\n    #expect(title.count == 3)\n}\n// 这个例子只验证字符串语义；业务测试应调用真实校验函数。</code></pre>"
+      },
+      {
+        "title": "把界面验收写成可复现旅程",
+        "html": "<p>设计一条旅程：启动独立测试存储 → 新建条目 → 输入标题 → 保存 → 列表显示 → 重开应用 → 条目仍在。为按钮提供稳定的 accessibilityIdentifier，UI 测试不要依赖界面坐标或翻译后的文案。</p><p>只在 UI 测试 target 中引用 XCUIApplication。等待可见条件用 waitForExistence(timeout:)，随后断言结果；设置了 timeout 仍不代表可以忽略返回值。执行 UI 自动化需要模拟器或真实运行环境，swift test 不会自动点界面。当前仓库是否实际完成 UI 自动化，以 VERIFICATION.md 为准。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "为“删除条目”写一张三层证据表",
+      "steps": [
+        "在 Xcode 按 ⌘U 运行 macOS 单元测试。",
+        "找到删除测试，确认它读取的是保存后的新上下文。",
+        "在 iOS 模拟器手动新建、编辑、删除，再重启；记录 OS、步骤、预期与结果。",
+        "扩展练习：新增 UI Testing Bundle，把这条路径写成 UI 测试。"
+      ],
+      "expected": "能明确说出哪些行为已有自动化证据、哪些是手工验证、哪些尚未覆盖。",
+      "solution": "<p>规则层：不存在的条目如何处理；集成层：删除后 fetch 为空；UI 层：触发删除后列表与详情都保持一致。记录测试运行命令与结果。不要用单元测试通过推导“VoiceOver 已通过”或“真机已通过”。</p>"
+    },
+    "quiz": {
+      "question": "swift test 通过，就能证明应用的按钮可以被正常点击。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "SwiftPM 单元测试不验证真实界面交互。需要 UI 自动化或明确的手工交互证据。"
+    },
+    "retrieval": [
+      "为什么新上下文读取比检查原对象更能证明保存行为？",
+      "应该在哪一层验证取消请求不会显示错误弹窗？"
+    ],
+    "sources": [
+      {
+        "title": "XCTest and XCUIAutomation",
+        "url": "https://developer.apple.com/documentation/xctest"
+      },
+      {
+        "title": "Adding tests to your Xcode project",
+        "url": "https://developer.apple.com/documentation/xcode/adding-tests-to-your-xcode-project"
+      }
+    ],
+    "pitfalls": [
+      "断言执行了并不表示断言有效：先确认它能够在错误实现下失败。",
+      "不要让共享单例或真实网络决定测试结果。"
+    ],
+    "lab": {
+      "label": "NativeStudy 完整项目与运行说明",
+      "path": "examples/NativeStudy/README.md",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj\n# 选择 NativeStudy-macOS + My Mac，或 NativeStudy-iOS + iPhone 模拟器，再按 ⌘R"
+    }
+  },
+  {
+    "id": 37,
+    "slug": "debugging-and-performance",
+    "title": "用 Xcode 解释一次卡顿与一次对象泄漏",
+    "module": "原生工程实践",
+    "minutes": 30,
+    "prerequisites": [
+      36
+    ],
+    "objective": "采集一段性能证据，指出瓶颈所在，而不是凭 UI 观感猜测。",
+    "summary": "浏览器 DevTools 的观察习惯仍然有用，但原生应用的线程、分配和视图生命周期需要新的工具。",
+    "sections": [
+      {
+        "title": "先区分三类问题",
+        "html": "<p>编译错误看诊断和调用上下文；运行崩溃看堆栈与出错线程；卡顿看时间采样。开始时记录设备、OS、Debug/Release、数据规模与复现操作。Debug 下的卡顿可帮助定位，但不能当作发布版性能数字。</p><p>为一次保存操作设置断点，运行到断点后用 Variables 查看草稿与实体。Step Over 看当前层的流程，Step Into 进入调用，Continue 恢复。条件断点能只在空标题或特定 ID 时停下，比到处打印内容更精确。</p>"
+      },
+      {
+        "title": "CPU 与内存分别寻找证据",
+        "html": "<p>在 Product → Profile 中选择 Time Profiler，重复触发你观察到的慢操作，选中时间范围再看热点调用。若 MainActor 上解析大量 JSON 或排序，先减小输入验证瓶颈，再考虑迁移计算边界。换成 async 函数不会自动让 CPU 工作离开主 actor。</p><p>Memory Graph 适合查对象之间的持有关系，Allocations 适合看数量和存活趋势。反复打开并关闭详情页后若对象持续增加，检查闭包、计时器、观察者和任务的持有链；weak 只有在不应持有时才使用，不是普适修复。</p>"
+      },
+      {
+        "title": "日志只记录对定位有帮助的信息",
+        "html": "<p>用 Logger 按 subsystem/category 分组。避免记录用户笔记、令牌和完整请求体；在日志中保留事件类型、非敏感数量与错误类别通常就能定位。保存开始与结束两个日志可解释顺序，但精确耗时分析应使用 Instruments 或 signpost。</p><pre><code>import OSLog\nlet logger = Logger(subsystem: \"learning.native\", category: \"storage\")\nlet itemCount = 3\nlogger.info(\"Save completed; count=\\(itemCount)\")</code></pre><p>验收优化时固定同一输入和环境，记录改前改后的耗时、内存与交互表现。若只改了实现却没有可比较测量，只能说“已重构”，不能说“已优化”。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "做一次可复现的性能观察",
+      "steps": [
+        "以 Release 配置 Profile NativeStudy，保存一条固定标题的记录。",
+        "记录 Time Profiler 中主要工作及其线程。",
+        "连续开关详情 20 次，在 Memory Graph 检查未释放的编辑器或 loader。",
+        "写下一个有证据的结论和一个未验证的假设。"
+      ],
+      "expected": "得到附环境与操作的观察记录；不把一次采样中未出现问题当作永久无泄漏。",
+      "solution": "<p>如果没有观察到异常，记录“当前数据规模、20 次路径未发现持续增长”，而非强行制造优化。若看到主线程 I/O，先把测试数据和测量窗口固定，再尝试拆出服务，重复相同操作比较。任何实验性阻塞代码在提交前删除。</p>"
+    },
+    "quiz": {
+      "question": "把耗时排序函数加上 async，就能保证它在后台线程执行。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "async 表示可以挂起，不保证计算在后台；隔离和执行器行为需要独立判断。"
+    },
+    "retrieval": [
+      "Time Profiler 与 Memory Graph 各能证明什么？",
+      "为什么 Release 和 Debug 的性能结果不可直接比较？"
+    ],
+    "sources": [
+      {
+        "title": "Performance and metrics",
+        "url": "https://developer.apple.com/documentation/xcode/performance-and-metrics"
+      },
+      {
+        "title": "Improving your app’s performance",
+        "url": "https://developer.apple.com/documentation/xcode/improving-your-app-s-performance"
+      }
+    ],
+    "pitfalls": [
+      "SwiftUI body 执行次数不等于实际屏幕绘制次数。",
+      "看到 retain cycle 先画强引用路径，避免无差别添加 weak。"
+    ],
+    "lab": {
+      "label": "NativeStudy 完整项目与运行说明",
+      "path": "examples/NativeStudy/README.md",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj\n# 选择 NativeStudy-macOS + My Mac，或 NativeStudy-iOS + iPhone 模拟器，再按 ⌘R"
+    }
+  },
+  {
+    "id": 38,
+    "slug": "macos-windows-and-commands",
+    "title": "让 Mac 应用像一个 Mac 应用",
+    "module": "原生工程实践",
+    "minutes": 30,
+    "prerequisites": [
+      37
+    ],
+    "objective": "解释窗口状态与应用状态，并验证菜单命令作用于当前窗口。",
+    "summary": "共享业务代码不等于两个平台采用同一种交互。Mac 用户需要窗口、菜单和键盘操作。",
+    "sections": [
+      {
+        "title": "Scene 表达应用结构",
+        "html": "<p>WindowGroup 定义一类窗口；在支持的平台上可以出现多个实例。Settings 是 macOS 设置场景。只把 iPhone 页面等比例放大，会丢失窗口恢复、菜单与多任务上下文。打开 NativeStudyApp，找到这两种 Scene，再运行 Mac scheme 观察应用菜单。</p><p>NativeStudy 的 StudyPreferences 在 App 层建立，因此多个窗口看到同一个会话偏好；列表的搜索和选中状态由各窗口视图持有。这个选择并非固定答案：如果你希望每个窗口独立筛选，就把筛选状态移到窗口级。</p>"
+      },
+      {
+        "title": "命令必须有目标",
+        "html": "<p>假设打开两个窗口，菜单“新建学习条目”应该作用于用户当前操作的窗口。把一个全局 Boolean 发给所有窗口会同时打开多个 sheet。样例借助 FocusedValue 提供当前窗口能力，再由 Commands 调用；当没有可执行目标时按钮禁用。</p><pre><code>// NativeStudyApp 中的思路，完整代码见 Sources。\n@FocusedValue(\\.newStudyItem) private var newStudyItem\n\n// CommandGroup 内：\nButton(\"New Study Item\") { newStudyItem?() }\n    .keyboardShortcut(\"n\", modifiers: [.command, .shift])\n    .disabled(newStudyItem == nil)</code></pre><p>快捷键应避免劫持系统常用操作。菜单不仅是另一个按钮位置，它还表达当前焦点可执行的动作。</p>"
+      },
+      {
+        "title": "设计一个双平台验收矩阵",
+        "html": "<p>Mac 验证 Tab 焦点、快捷键、窗口缩放和设置；iPhone 验证触摸目标、键盘遮挡和紧凑导航；iPad 再验分栏与大小变化。共用的数据约束应一致，但工具栏位置和导航呈现可不同。使用 #if os(macOS) 处理平台特有类型，使用 availability 判断同一平台的系统版本。</p><p>扩展练习可增加一个按条目 ID 打开的详情 WindowGroup。传递轻量 ID，在共享存储里找到实体，可以避免传递值副本导致两个窗口各改各的。窗口恢复时还需处理 ID 已删除的情况。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "验证新建菜单只影响当前窗口",
+      "steps": [
+        "运行 Mac scheme，用 File → New Window 创建第二个主窗口。",
+        "分别输入不同搜索条件，观察是否独立。",
+        "切换当前窗口，使用 ⌘⇧N；确认只在当前窗口出现编辑表单。",
+        "修改 Settings 的显示完成项选项，记录两个窗口的变化。"
+      ],
+      "expected": "窗口局部搜索独立；App 层会话偏好共享；新建动作由焦点窗口处理。",
+      "solution": "<p>如果两个窗口都响应新建，检查是否使用了 App 层共享 sheet Boolean。保留每个窗口的 presentation 状态，把“发起新建”的闭包以 focused value 暴露给菜单。若偏好也要独立，将其所有者下移，而不是复制一套不会同步的引用。</p>"
+    },
+    "quiz": {
+      "question": "在 App 中创建同一个引用对象并注入多个窗口，会共享该对象。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "对象的所有者和注入范围决定共享行为；窗口独立状态需要单独实例或局部状态。"
+    },
+    "retrieval": [
+      "为什么菜单命令要知道焦点？",
+      "同一条目在两个窗口展示，传副本还是 ID 更容易保持一致？"
+    ],
+    "sources": [
+      {
+        "title": "Bring multiple windows to your SwiftUI app",
+        "url": "https://developer.apple.com/videos/play/wwdc2022/10061/"
+      },
+      {
+        "title": "SwiftUI apps and scenes",
+        "url": "https://developer.apple.com/documentation/technologyoverviews/swiftui"
+      }
+    ],
+    "pitfalls": [
+      "CSS 响应式布局经验不能代替原生平台交互习惯。",
+      "编译条件 #if os 与运行时 #available 解决不同问题。"
+    ],
+    "lab": {
+      "label": "NativeStudy 完整项目与运行说明",
+      "path": "examples/NativeStudy/README.md",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj\n# 选择 NativeStudy-macOS + My Mac，或 NativeStudy-iOS + iPhone 模拟器，再按 ⌘R"
+    }
+  },
+  {
+    "id": 39,
+    "slug": "uikit-appkit-bridges",
+    "title": "把 UIKit / AppKit 控件接入 SwiftUI",
+    "module": "原生工程实践",
+    "minutes": 30,
+    "prerequisites": [
+      38
+    ],
+    "objective": "沿着双向数据流解释一次原生文本控件编辑，并避免重复写入。",
+    "summary": "原生工程师既要会 SwiftUI，也要能读懂和接入现有 UIKit、AppKit 代码。",
+    "sections": [
+      {
+        "title": "两个方向，两个入口",
+        "html": "<p>SwiftUI 嵌入 UIKit View 使用 UIViewRepresentable；嵌入 AppKit View 使用 NSViewRepresentable。make 方法创建原生控件，update 方法把新的 SwiftUI 输入应用到已有实例。不要每次更新都重新创建控件，否则选区和输入状态容易丢失。</p><p>另一方向是 UIHostingController / NSHostingView：把 SwiftUI 放入现有平台界面。选择方向取决于页面的所有者；并非项目使用 SwiftUI 后就再也不能使用平台框架。</p>"
+      },
+      {
+        "title": "Coordinator 是事件回流的适配器",
+        "html": "<p>原生控件的 delegate 或 target-action 把用户事件交给 Coordinator，再修改 Binding。Binding 的所有者仍在 SwiftUI。Representable 是值，会被重新创建；Coordinator 是可持续存在的对象，update 中应让它引用最新的 Binding。</p><pre><code>// iOS 完整实现见 NativeBridgeWorkshopView.swift。\nfunc updateUIView(_ field: UITextField, context: Context) {\n    context.coordinator.text = $text\n    guard field.markedTextRange == nil, field.text != text else { return }\n    field.text = text\n}</code></pre><p>这两个判断分别保护输入法组合态、避免相同值重复赋值。中文输入尚未完成时覆盖 text，可能打断候选过程；不能只用英文键盘测试就宣称可用。</p>"
+      },
+      {
+        "title": "布局与清理也有归属",
+        "html": "<p>SwiftUI 管理被包装视图的布局，不应从原生控件内部随意修改其 frame 来对抗外层布局。需要提供尺寸时研究 representable 的 sizeThatFits；监听外部资源时在 dismantle 阶段清理。</p><p>样例是教学用单行文本桥接，不是完整富文本编辑器。生产编辑器还要处理选区恢复、撤销、焦点、组合输入、辅助功能与平台差异。先完成最小双向数据流，再逐项增加功能。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "从两个输入框追踪同一份文本",
+      "steps": [
+        "新建任意学习条目，进入详情的 Native bridge workshop。",
+        "先在 SwiftUI text 输入，再在 Native text 输入；观察底部文本。",
+        "使用中文输入法输入拼音并选词，观察组合输入。",
+        "在 update 和 Coordinator 回调分别打断点，记录调用方向。"
+      ],
+      "expected": "两种控件共享最终提交的文本；组合输入过程中不会被另一方向的重复更新打断。",
+      "solution": "<p>保留 @State 为唯一真值。事件方向是原生用户输入 → Coordinator → Binding → State；渲染方向是 State → update → 原生控件。相同值不写入，组合态不覆盖。若焦点行为仍异常，先记录 OS 与输入法，不要用不断 dispatch 到下一帧掩盖循环。</p>"
+    },
+    "quiz": {
+      "question": "makeUIView 创建控件，updateUIView 把新的输入同步到已有实例。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "区分创建与更新，避免反复重建导致输入状态或选区丢失。"
+    },
+    "retrieval": [
+      "Coordinator 为什么要更新其 Binding？",
+      "组合输入和最终提交的字符串有什么不同？"
+    ],
+    "sources": [
+      {
+        "title": "UIViewRepresentable",
+        "url": "https://developer.apple.com/documentation/swiftui/uiviewrepresentable"
+      },
+      {
+        "title": "NSViewRepresentable",
+        "url": "https://developer.apple.com/documentation/swiftui/nsviewrepresentable"
+      }
+    ],
+    "pitfalls": [
+      "原生控件状态不等于 DOM 属性，反复写入可能重置输入中的状态。",
+      "桥接不是只把类型包起来，还包括生命周期、布局与事件语义。"
+    ],
+    "lab": {
+      "label": "NativeStudy 完整项目与运行说明",
+      "path": "examples/NativeStudy/README.md",
+      "command": "open examples/NativeStudy/NativeStudy.xcodeproj\n# 选择 NativeStudy-macOS + My Mac，或 NativeStudy-iOS + iPhone 模拟器，再按 ⌘R"
+    }
+  },
+  {
+    "id": 40,
+    "slug": "files-secrets-and-privacy",
+    "title": "把文件、偏好和敏感数据放在正确位置",
+    "module": "原生工程实践",
+    "minutes": 30,
+    "prerequisites": [
+      39
+    ],
+    "objective": "完成一个会报告错误的 JSON 导入，并说明不同数据的存储边界。",
+    "summary": "持久化不只是把 JSON 写到磁盘，还包括用户授权、失败处理、数据版本与秘密的保存方式。",
+    "sections": [
+      {
+        "title": "先为数据分类",
+        "html": "<p>开关与排序偏好可以使用 UserDefaults / AppStorage；业务实体适合 SwiftData 或明确设计的文件格式；少量密码、令牌等秘密应使用 Keychain。任何客户端内置密钥都无法靠改文件名变安全。当前 NativeStudy 的偏好只保留在会话内，学习条目用 SwiftData。</p><p>失败路径必须进入设计：磁盘不可写、JSON 损坏、旧版 schema、用户撤销授权。导入前先完整解码并验证，再开始更改业务状态；不能已经写入一半才发现后半段格式错误。</p>"
+      },
+      {
+        "title": "系统文件选择器交付的是一种授权",
+        "html": "<p>fileImporter 让用户选择支持类型的文件。系统返回 security-scoped URL 时，读取期间调用 startAccessingSecurityScopedResource，并在成功取得权限后成对 stop。defer 适合表达“无论成功或抛错都释放”。权限失败最终必须可观察，不能静默显示导入成功。</p><pre><code>let url = try result.get()\nlet didStart = url.startAccessingSecurityScopedResource()\ndefer { if didStart { url.stopAccessingSecurityScopedResource() } }\nlet data = try Data(contentsOf: url)\nlet items = try JSONDecoder().decode([ImportedItem].self, from: data)</code></pre><p>补充实验同步读取小文件，只为观察授权和解码。正式产品需限制大小，并把 I/O 放到明确的工作边界，支持取消。不要在 MainActor 上读取任意体积的外部文件。</p>"
+      },
+      {
+        "title": "隐私声明跟随实际使用",
+        "html": "<p>PrivacyInfo.xcprivacy 声明数据收集与 required reason APIs 使用。只写“我们不收集”不能替代对 API 的检查；如果新增 UserDefaults 等相关调用，应按真实用途查看当前 Apple 允许的理由。摄像头等受保护资源还可能涉及用途描述、capability 与用户授权，这是不同配置层。</p><p>对学习项目先建立数据清单：条目标题在哪里保存、是否出设备、日志是否包含内容、哪些 SDK 参与。课程示例没有远程后端；以后接入服务时要重新检查，不能沿用离线项目的结论。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "导入有效和无效 JSON，并观察错误",
+      "steps": [
+        "按 PlatformRecipes README 将 ImportWorkshop 加到练习 target，作为临时根视图或 Preview 运行。",
+        "准备 [{\"title\":\"学习 Swift\"}] 文件并导入。",
+        "用损坏的 JSON 再导入，观察错误提示且没有数据库写入。",
+        "说明把导入逻辑用于大文件之前必须增加的两项保护。"
+      ],
+      "expected": "成功时显示已验证条数；失败时展示原因；关闭文件后不继续持有不必要授权。",
+      "solution": "<p>使用 Result.get 把选择失败纳入 do/catch；解码成功后才更新成功状态。对每个成功的 start 安排 defer stop。大文件增加大小限制和可取消 I/O 服务，再把解码结果以值跨隔离边界交给 UI。Secrets 使用 Keychain 并处理 OSStatus，不写进 UserDefaults。</p>"
+    },
+    "quiz": {
+      "question": "把访问令牌写进 UserDefaults，等价于保存在 Keychain。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "UserDefaults 用于偏好，不提供 Keychain 的秘密存储语义。"
+    },
+    "retrieval": [
+      "文件授权、数据解码和数据库事务分别会在哪里失败？",
+      "隐私清单和系统权限提示解决的是同一个问题吗？"
+    ],
+    "sources": [
+      {
+        "title": "fileImporter",
+        "url": "https://developer.apple.com/documentation/swiftui/view/fileimporter(ispresented:allowedcontenttypes:oncompletion:)"
+      },
+      {
+        "title": "Keychain services",
+        "url": "https://developer.apple.com/documentation/security/keychain-services"
+      },
+      {
+        "title": "Privacy manifest files",
+        "url": "https://developer.apple.com/documentation/bundleresources/privacy-manifest-files"
+      }
+    ],
+    "pitfalls": [
+      "沙盒内可访问不等于所有外部路径都可直接读取。",
+      "加密传输不意味着可以把令牌打印到日志。"
+    ],
+    "lab": {
+      "label": "文件导入补充实验",
+      "path": "examples/PlatformRecipes/README.md",
+      "command": "xcrun swiftc -swift-version 6 -typecheck examples/PlatformRecipes/ImportWorkshop.swift\n# 界面运行方法见 PlatformRecipes/README.md"
+    }
+  },
+  {
+    "id": 41,
+    "slug": "build-sign-release",
+    "title": "从本地构建走到可交付版本",
+    "module": "原生工程实践",
+    "minutes": 30,
+    "prerequisites": [
+      40
+    ],
+    "objective": "区分 build、test、archive、签名与分发，并完成发布前证据清单。",
+    "summary": "Web 的部署通常更换服务器上的文件；原生发布还涉及设备可执行代码、签名身份、系统权限和用户本地数据。",
+    "sections": [
+      {
+        "title": "一个成功构建只回答一个问题",
+        "html": "<p>build 检查某个 SDK、配置与目标是否能产生二进制；test 执行选定测试；archive 为分发组织产物。模拟器的成功构建不能证明 iPhone 真机运行，更不能证明可上传商店。CODE_SIGNING_ALLOWED=NO 用于本课程本地构建检查，不能据此获得可分发到用户设备的应用。</p><p>Bundle Identifier 是应用身份的一部分；Marketing Version 是用户可见版本；Build Number 标识构建。保持开发、测试和发布配置可追踪，记录工具链、源代码版本、依赖和构建参数。</p>"
+      },
+      {
+        "title": "选择发布路径后再配置身份",
+        "html": "<p>iOS 通常通过 App Store Connect / TestFlight 做测试分发和上架；实际所需账号、证书和描述文件按 Apple 当前规则核对。Mac 除 Mac App Store 外，也可通过 Developer ID 签名和公证后直接分发。公证不等于 App Review，也不验证你的业务功能。</p><p>课程不会替你创建账号、购买会员、签名或上传应用。学习任务是理解流程并准备可审阅产物。实际分发时先完成图标、权限用途、隐私信息、版本元数据和真机验证，再按目标渠道执行。</p>"
+      },
+      {
+        "title": "CI 让证据可重现",
+        "html": "<p>运行 scripts/verify.sh，把包测试和两个平台的无签名构建串起来。CI 应固定 Xcode 版本与目标系统，保留失败日志或 xcresult；不要仅存一行“成功”。Release 验收要覆盖从旧数据升级、低存储、网络失败、后台恢复和可访问性。</p><pre><code># 根目录；不上传、不签名、不发布\nbash scripts/verify.sh\n\n# 显式查看本机可用工具与目标\nxcodebuild -version\nxcrun simctl list devices available</code></pre><p>发布前检查当前 App Store 上传要求。文档会变化，本课给出流程框架与官方入口，不把某一年的最低 Xcode 版本写成永久规则。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "准备一份不会混淆验证范围的交付记录",
+      "steps": [
+        "运行根目录 scripts/verify.sh。",
+        "写出本机 Xcode、Swift、SDK、最低部署版本和实际测试 OS。",
+        "根据 CAPSTONE.md 标出未完成的真机、旧版系统与分发项。",
+        "在 Xcode 看 Archive 工作流，理解所需身份；本练习不提交上传。"
+      ],
+      "expected": "能向同事明确说明“什么已验证、在哪验证、还有什么未验证”，而非只说编译通过。",
+      "solution": "<p>记录例如“macOS scheme build 成功；iOS simulator build 成功；Swift Testing 通过；设备交互与签名分发未做”。把最低部署版本与实际测试 OS 分开，列出发布目标所需的下一步。CI 使用同样命令并保留结果，不把测试覆盖描述成全平台保证。</p>"
+    },
+    "quiz": {
+      "question": "模拟器构建、设备 archive 与签名分发需要分别完成并验证。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "构建目标、产物与分发身份不同，不能用其中一步替代其它步骤。"
+    },
+    "retrieval": [
+      "公证和 App Review 各在验证什么？",
+      "为什么升级安装是不同于全新安装的测试场景？"
+    ],
+    "sources": [
+      {
+        "title": "Distributing your app for beta testing and releases",
+        "url": "https://developer.apple.com/documentation/xcode/distributing-your-app-for-beta-testing-and-releases"
+      },
+      {
+        "title": "Notarizing macOS software before distribution",
+        "url": "https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution"
+      },
+      {
+        "title": "Testing a release build",
+        "url": "https://developer.apple.com/documentation/xcode/testing-a-release-build"
+      }
+    ],
+    "pitfalls": [
+      "不要把证书、令牌、密码提交到仓库。",
+      "项目最低支持 iOS17，不代表你已经在 iOS17 设备上测过。"
+    ],
+    "lab": {
+      "label": "完整工程验证脚本",
+      "path": "scripts/verify.sh",
+      "command": "bash scripts/verify.sh"
+    }
+  },
+  {
+    "id": 42,
+    "slug": "macros-ownership-availability",
+    "title": "读懂宏、所有权与版本边界",
+    "module": "原生工程实践",
+    "minutes": 30,
+    "prerequisites": [
+      41
+    ],
+    "objective": "展开一个系统宏，并用编译器观察不可复制值被消耗后的行为。",
+    "summary": "这一课建立阅读现代 Swift 代码的能力。自定义编译器插件与高性能所有权设计可在主线之后深入。",
+    "sections": [
+      {
+        "title": "宏在编译时生成代码",
+        "html": "<p>@Observable、@Model 和 #Preview 都不是普通运行时函数。宏在编译阶段展开为 Swift 代码，再接受检查。在 Xcode 对宏调用选择 Expand Macro，可以看到观察访问器或模型支持代码；理解生成结果比死记“加个注解就好了”更可靠。</p><p>宏不是任意文本替换，也不等于属性包装器。@State 是属性包装器，@Observable 是 attached macro；它们可以共同出现但负责不同事。构建自己的宏需要独立实现 target 与 SwiftSyntax，本课程先学会使用和调试系统宏。</p>"
+      },
+      {
+        "title": "值语义之外，还有是否允许复制",
+        "html": "<p>大多数普通值可复制。~Copyable 表示一个类型不承诺可复制，适合表达某些独占资源的生命周期。borrowing 参数允许读取而不消耗所有权，consuming 消耗调用方的值，inout 则提供独占修改访问。这不是 TypeScript readonly 的另一种拼写。</p><pre><code>struct ExportTicket: ~Copyable {\n    let filename: String\n    borrowing func preview() -&gt; String { filename }\n    consuming func finish() { print(filename) }\n}</code></pre><p>先运行 Ownership.swift，再在 finish 后取消注释 preview 的调用；编译器会拒绝消耗后的再次使用。示例不接触真实文件，只演示语言规则。普通业务模型不应仅为“高级”而改成不可复制类型。</p>"
+      },
+      {
+        "title": "三种版本判断不要混为一谈",
+        "html": "<p>#if compiler(>=6.2) 判断编译器能否理解某些语法；#if os(macOS) 处理平台类型；if #available(iOS 18, macOS 15, *) 保护运行时 API 使用。Deployment Target 设定最低系统版本，SDK 决定编译时看到哪些声明。</p><p>Swift 6.2 引入的默认隔离等能力还受项目设置影响。读新示例先查 proposal 的实现版本、当前编译器以及 feature flag，再决定是否迁入本课程 Swift 6.0 基线项目。新编译器支持旧 API，不会让旧系统获得新 API。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "让编译器拒绝一次非法重复使用",
+      "steps": [
+        "运行 Ownership.swift 并预测两行输出。",
+        "在 consuming finish 后取消注释 preview 调用，运行并阅读诊断。",
+        "恢复合法版本，再对 NativeStudy 的 @Observable 选择 Expand Macro。",
+        "说出宏新增的一种支持能力，以及它没有替你处理的一种业务责任。"
+      ],
+      "expected": "合法程序运行；非法版本无法编译；能够解释失败来自所有权而不是线程问题。",
+      "solution": "<p>finish 消耗 ticket 后，原变量不能再次读取；把只读 preview 移到 finish 之前，或重新创建一个新 ticket。@Observable 生成观察支持，不会生成保存策略或 MainActor 隔离。不要通过复制、强转或不安全标记绕过生命周期约束。</p>"
+    },
+    "quiz": {
+      "question": "@Observable 会自动替模型加入业务校验和数据库持久化。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "它生成观察支持；业务规则、持久化与隔离仍需独立设计。"
+    },
+    "retrieval": [
+      "宏与属性包装器的主要区别是什么？",
+      "编译器版本足够新，为什么仍需 #available？"
+    ],
+    "sources": [
+      {
+        "title": "TSPL — Macros",
+        "url": "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/macros/"
+      },
+      {
+        "title": "SE-0390 Noncopyable structs and enums",
+        "url": "https://github.com/swiftlang/swift-evolution/blob/main/proposals/0390-noncopyable-structs-and-enums.md"
+      }
+    ],
+    "pitfalls": [
+      "~Copyable 不等于线程安全；Sendable 也不等于值不可变。",
+      "不要为了使用新关键字而增加无收益的复杂度。"
+    ],
+    "lab": {
+      "label": "不可复制值实验",
+      "path": "examples/PlatformRecipes/Ownership.swift",
+      "command": "swift -swift-version 6 examples/PlatformRecipes/Ownership.swift"
+    }
+  },
+  {
+    "id": 43,
+    "slug": "lifecycle-deeplinks-background",
+    "title": "处理生命周期、深链接与后台边界",
+    "module": "原生工程实践",
+    "minutes": 30,
+    "prerequisites": [
+      42
+    ],
+    "objective": "解析一个外部条目链接，并解释 App 进入后台后哪些工作仍有保证。",
+    "summary": "应用不是永远开着的页面。系统可能暂停、重建或终止进程，用户也可能从外部链接直接进入详情。",
+    "sections": [
+      {
+        "title": "页面、场景与进程不是同一生命周期",
+        "html": "<p>SwiftUI task 通常跟随视图身份与生命周期；ScenePhase 表达场景 active、inactive、background 等状态；进程是否仍存在由系统管理。把重要草稿等到“应用一定要退出时”再保存，会依赖一个并不可靠的时机。</p><p>View 中读取 scenePhase 反映其所属场景；App 层观察可能反映所有场景的汇总情况。Mac 多窗口中，一个窗口失去焦点并不说明整个 App 可以清空共享状态。</p>"
+      },
+      {
+        "title": "把 URL 变成可验证的路由值",
+        "html": "<p>外部输入先校验 scheme、host 与 ID，再查当前数据库。不能只要字符串包含 item 就进入页面，也不能假定链接指向的记录仍存在。热启动和冷启动都要走相同解析逻辑；冷启动时等依赖初始化后再呈现目的地。</p><pre><code>guard url.scheme == \"nativestudy\", url.host == \"item\",\n      let id = UUID(uuidString: url.lastPathComponent) else {\n    // 显示可理解的无效链接状态\n    return\n}\n// 按 id 查库；若记录已删除，显示不存在页面。</code></pre><p>onOpenURL 负责接收已交付的链接。自定义 scheme 需注册 URL Types；Universal Links 还需域名关联配置。本课片段只做解析，不能仅加入回调就认为系统配置已经完成。</p>"
+      },
+      {
+        "title": "并发任务不等于后台执行资格",
+        "html": "<p>Task、Task.detached 都不会授予无限后台时间。后台下载、内容刷新和长任务有不同系统机制；BGTaskScheduler 等机制受系统调度，不能承诺每隔五分钟精确执行。先根据用户价值选择能力，再处理到期取消、状态保存与恢复。</p><p>通知和 WidgetKit 是后续专项。不要为了学习异步而一开始就申请多种后台权限。先把离开页面取消、回到前台刷新、记录恢复三件事做对，再连接系统服务。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "区分“解析成功”和“系统路由完整可用”",
+      "steps": [
+        "按补充实验 README 将 LifecycleWorkshop 加入练习 target，观察场景日志。",
+        "阅读 onOpenURL 的三个校验条件，列出不合法 URL 用例。",
+        "扩展：在独立练习 target 注册 nativestudy scheme，再用有效 UUID 链接启动。",
+        "为不存在的 ID 设计空状态；分别测试已运行与冷启动。"
+      ],
+      "expected": "解析器只接收符合规则的 ID；能把 URL 配置、解析、查库与导航四步分开验收。",
+      "solution": "<p>合法格式是 nativestudy://item/&lt;UUID&gt;。但合法 UUID 不证明有该数据。收到链接后先保存待处理路由，待数据库准备好再查询；找不到时显示不存在。ScenePhase 变化只触发短小可恢复工作，不启动永不结束的 detached 循环。</p>"
+    },
+    "quiz": {
+      "question": "Task.detached 可以让 iOS 应用不受限制地在后台持续运行。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 1,
+      "explanation": "Swift 任务调度与系统后台运行权限是两层不同机制。"
+    },
+    "retrieval": [
+      "为什么链接解析成功后仍可能不能显示详情？",
+      "为什么不能只在应用即将退出时保存数据？"
+    ],
+    "sources": [
+      {
+        "title": "ScenePhase",
+        "url": "https://developer.apple.com/documentation/swiftui/scenephase"
+      },
+      {
+        "title": "onOpenURL",
+        "url": "https://developer.apple.com/documentation/swiftui/view/onopenurl(perform:)"
+      },
+      {
+        "title": "Choosing Background Strategies for Your App",
+        "url": "https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app"
+      }
+    ],
+    "pitfalls": [
+      "不要把浏览器 tab 隐藏事件与原生应用后台行为一一对应。",
+      "自定义 scheme 的存在不证明调用者身份可信。"
+    ],
+    "lab": {
+      "label": "生命周期与路由实验",
+      "path": "examples/PlatformRecipes/LifecycleWorkshop.swift",
+      "command": "xcrun swiftc -swift-version 6 -typecheck examples/PlatformRecipes/LifecycleWorkshop.swift\n# 运行及 URL Types 配置见 PlatformRecipes/README.md"
+    }
+  },
+  {
+    "id": 44,
+    "slug": "capstone-and-next-steps",
+    "title": "毕业项目：独立完成一个可解释的原生功能",
+    "module": "原生工程实践",
+    "minutes": 35,
+    "prerequisites": [
+      43
+    ],
+    "objective": "完成一个从数据建模到双平台验收的垂直功能，并用证据解释设计选择。",
+    "summary": "课程材料已经齐备，真正的完成标准是：面对一个新需求，你能独立设计、实现、验证，并讲清限制。",
+    "sections": [
+      {
+        "title": "一个有边界的真实需求",
+        "html": "<p>为 NativeStudy 增加“复习计划”：条目可设定下次复习日期，列表可筛选今日待复习，完成复习后按所选间隔安排下一次。先不接入通知或云同步，聚焦一个可靠的本地功能。需求见 CAPSTONE.md，包含输入、日期边界、持久化与平台行为。</p><p>先手画状态和数据流，再写最小模型变化。日期规则要说明时区与“今天”的定义，测试跨日边界。旧数据怎样获得默认值属于迁移设计的一部分；新建数据库测试通过不等于升级不会丢数据。</p>"
+      },
+      {
+        "title": "走完一个垂直切片",
+        "html": "<p>第一步实现纯规则并测试；第二步写入存储并证明重开可读；第三步加入表单和列表；第四步处理失败、取消与空状态；最后完成键盘、触控、VoiceOver 与本地化验收。每步保留一个可运行成果，避免同时改模型、并发和导航后失去定位线索。</p><p>复用已有模型时保持稳定 ID；跨隔离边界传递值 DTO 或 ID，不随意把某个上下文的持久模型交给后台 actor。把主线程上的工作量控制在能解释的范围。</p>"
+      },
+      {
+        "title": "用评审问题检验理解",
+        "html": "<p>请同事或社区评审一个最小问题，例如“这份复习规则在时区变化后应该如何解释”，附最小代码、工具链、预期与实测。Swift Forums 适合语言与并发讨论；Apple Developer Forums 适合平台 API 行为。不要上传用户数据、内部代码和签名凭据。</p><p>最终演示不应只有成功路径。主动展示坏输入、保存失败或资源加载失败、重启恢复、两种尺寸和辅助功能操作。尚未拥有的设备如实写为未验证。下一阶段根据你目标岗位选择 UIKit/AppKit 既有项目、系统扩展或发布实践，不必同时学习所有框架。</p>"
+      }
+    ],
+    "exercise": {
+      "prompt": "提交一份可被别人复现的毕业成果",
+      "steps": [
+        "阅读 CAPSTONE.md，先写需求与状态归属。",
+        "按规则、存储、UI、失败恢复的顺序实现复习计划。",
+        "运行脚本与新增测试，在 iOS 模拟器和 macOS 各走一遍核心旅程。",
+        "填写证据表并完成口头解释题；请 Codex 以代码评审方式检查成果。"
+      ],
+      "expected": "代码、测试、双平台操作记录与未验证项齐全；能不看答案解释 actor、状态所有者和保存边界。",
+      "solution": "<p>这里不给完整毕业代码，避免把复制当成独立完成。可参考的分解是：ReviewPolicy（纯日期规则）→ StudyItem 的计划字段 → 保存/读取与迁移策略 → 编辑界面 → 待复习查询 → 完成复习操作。验收表给出具体通过标准；卡住时只请求当前一步的提示，完成后将真正掌握的非显然知识记入 learning-records。</p>"
+    },
+    "quiz": {
+      "question": "独立完成新需求并解释设计，比浏览完课程更能提供掌握证据。",
+      "options": [
+        "正确",
+        "错误"
+      ],
+      "answer": 0,
+      "explanation": "学习记录依据展示的能力，网页勾选只代表自报练习进度。"
+    },
+    "retrieval": [
+      "不看材料，说明 @State、@Bindable、@Environment 各自职责。",
+      "如果并发编译检查通过，为什么仍需要取消和乱序响应测试？"
+    ],
+    "sources": [
+      {
+        "title": "Swift Forums",
+        "url": "https://forums.swift.org/"
+      },
+      {
+        "title": "Apple Developer Forums",
+        "url": "https://developer.apple.com/forums/"
+      },
+      {
+        "title": "Human Interface Guidelines",
+        "url": "https://developer.apple.com/design/human-interface-guidelines/"
+      }
+    ],
+    "pitfalls": [
+      "不要把参考解法原样重打当成迁移能力。",
+      "未验证的真机、签名和上架步骤要明确保留，而非用构建成功代替。"
+    ],
+    "lab": {
+      "label": "毕业项目任务书与验收表",
+      "path": "CAPSTONE.md",
+      "command": "bash scripts/verify.sh\n# 新功能验收与证据记录见 CAPSTONE.md"
+    }
+  }
+]

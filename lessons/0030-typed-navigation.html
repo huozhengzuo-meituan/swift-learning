@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="面向 Web 前端工程师的 Swift 6、SwiftUI 与 Apple 原生开发课程"><title>导航：以数据描述目标和路径 · Swift Native Lab</title><link rel="stylesheet" href="../assets/course.css"><script defer src="../assets/course.js"></script></head><body><a class="skip" href="#main">跳到正文</a><header class="site-header"><a class="brand" href="../index.html">SWIFT / NATIVE LAB</a><nav class="header-links" aria-label="全站导航"><a href="../index.html#curriculum">课程</a><a href="../index.html#references">速查</a><a href="../README.md">运行指南</a></nav></header><main id="main" class="page "><div class="lesson-layout"><aside class="toc" aria-label="本课导航"><strong>LESSON 30</strong><a href="#part-1">导航目标用值表示</a><a href="#part-2">路径状态和模态状态有不同用途</a><a href="#part-3">同一数据模型，平台导航表现可以不同</a><a href="#practice">动手练习</a><a href="#quiz">即时自测</a><a href="#sources">官方资料</a><a href="../reference/glossary.html">术语速查 ↗</a></aside><article><div class="eyebrow">SwiftUI / 30 MIN</div><h1>导航：以数据描述目标和路径</h1><p class="lede">原生导航不只是一条 URL：窗口、分栏选择、压栈路径和模态编辑分别有自己的状态。</p><p class="meta">前置：<a href="0029-identity-lists-lifetime.html">29 身份与列表：状态为什么会保留或重置</a></p><div class="objective"><strong>本课的一个成果</strong>在详情中增加一个有类型的练习目标，并验证分栏与窄屏返回行为。</div><section id="part-1"><h2>导航目标用值表示</h2><p>NavigationLink(value:) 发出一个 Hashable 值，navigationDestination(for:) 将该类型映射到具体界面。示例 DetailRoute 使用 enum 表达 layoutWorkshop 与 nativeBridge，比散落的字符串路由容易维护。目标注册要处于对应 NavigationStack 内；不要在临时、惰性列表行里注册全局目标，否则框架可能无法稳定发现它。导航数据应轻量，通常用稳定 ID，而不是把复杂可变对象塞满路径。</p><pre><code class="language-swift">enum DetailRoute: Hashable {
+    case layoutWorkshop
+    case nativeBridge
+}
+NavigationLink(&quot;Layout workshop&quot;, value: DetailRoute.layoutWorkshop)
+// 在栈内的稳定位置注册：
+.navigationDestination(for: DetailRoute.self) { route in
+    switch route {
+    case .layoutWorkshop: LayoutWorkshopView()
+    case .nativeBridge: NativeBridgeWorkshopView()
+    }
+}</code></pre></section>
+<section id="part-2"><h2>路径状态和模态状态有不同用途</h2><p>需要程序化返回或深链时，使用 @State var path: [Route] 并传给 NavigationStack(path:)；append 表示前进，removeLast 表示后退。sheet 则用于编辑等独立任务，取消意味着结束该模态任务，不应顺便改变导航路径。NativeStudy 的主详情由 selection 决定，详情中的实验室用栈导航，编辑器用 sheet。这三种状态各自对应一个清楚的用户动作。</p><pre><code class="language-swift">@State private var path: [DetailRoute] = []
+// 练习：替换详情列中的 NavigationStack 为受控版本。
+NavigationStack(path: $path) {
+    // 在栈内注册 navigationDestination 后：
+    Button(&quot;布局练习&quot;) { path.append(.layoutWorkshop) }
+}</code></pre></section>
+<section id="part-3"><h2>同一数据模型，平台导航表现可以不同</h2><p>NavigationSplitView 适合侧边栏加详情；宽屏 iPad 和 macOS 可以同时显示两列，iPhone 等窄空间会折叠为栈。列表 selection 需要匹配 NavigationLink 的值类型。不要只在 Mac 编译成功就声称 iPhone 返回手势已验证；至少在两种布局下运行选择、进入实验室、返回、删除当前项。选择被删除或筛掉后，显示明确的空详情，而非访问已失效模型。</p><pre><code class="language-swift">NavigationSplitView {
+    List(selection: $selection) {
+        ForEach(visibleItems) { item in
+            NavigationLink(value: item.id) { StudyRow(item: item) }
+        }
+    }
+} detail: {
+    NavigationStack { /* 当前选择的详情 */ }
+}</code></pre></section><section class="lab"><h3>对应可运行实验</h3><p><a href="../examples/NativeStudy/Sources/StudyDetailView.swift">NativeStudy · StudyDetailView.swift</a></p><pre><code>open examples/NativeStudy/NativeStudy.xcodeproj；选择 NativeStudy-macOS → My Mac → ⌘R（iOS 选择 NativeStudy-iOS 和模拟器）。</code></pre><p class="source-note">终端命令默认在 swift-learning 根目录执行；说明为 Xcode 操作时，跟随项目 README。</p></section><section id="practice"><h2>动手：为详情增加一个“回忆练习”目标，使用枚举 case 注册，并在 iPhone 与 Mac 上走完返回流程。</h2><ol><li>DetailRoute 增加 recall case。</li><li>在 Workshops 区添加 NavigationLink，并在 switch 中添加 Text 或独立 RecallView。</li><li>分别在 Mac 窗口和 iPhone 模拟器选择条目、进入练习、返回详情和列表。</li></ol><div class="callout"><strong>验收现象</strong><p>新目标无需字符串拼接；返回层级清楚；窄屏不会把编辑取消当成导航后退。</p></div><details><summary>先独立完成，再展开参考解法</summary><p>给现有 DetailRoute 增加 case recall，再为该 case 返回一个独立视图。若要程序化导航才进一步引入 path，避免同时维护两套真相。</p><pre><code class="language-swift">case .recall:
+    Text(&quot;不看笔记解释 State 与 Binding 的区别&quot;)
+        .padding()
+        .navigationTitle(&quot;回忆练习&quot;)</code></pre></details></section><section><h2>从前端迁移时，留意这些误区</h2><ul><li>不要把模态编辑和压栈导航合并成同一个布尔值。</li><li>不要只按 Mac 窗口表现推断 iPhone 导航正确。</li></ul></section><section id="quiz"><h2>即时自测</h2><form class="quiz" data-quiz data-answer="0" data-explanation="平台和窗口尺寸会影响呈现；不能假定永远两列并排。"><fieldset><legend>NavigationSplitView 可根据可用空间把分栏折叠为紧凑导航。</legend><label><input type="radio" name="answer" value="0">正确</label><label><input type="radio" name="answer" value="1">错误</label></fieldset><button type="submit">检查答案</button><p class="feedback" role="status" aria-live="polite"></p><noscript><p>脚本未启用。参考答案：正确。平台和窗口尺寸会影响呈现；不能假定永远两列并排。</p></noscript></form></section><section><h2>合上页面，尝试回忆</h2><ul><li>为什么 Route 常用 Hashable 的 enum 或稳定 ID？</li><li>selection、path 与 sheet 状态分别代表什么？</li></ul><p class="source-note">建议在次日、第 3 天与第 7 天重做练习；这是起始复习节奏，可按遗忘情况调整。答错时先定位原因，再看解法。</p></section><section id="sources" class="sources"><h2>回到一手资料</h2><p>主读：第一项。正文是原创教学示例；语言与 API 语义以这些官方资料为依据。</p><ul><li><a href="https://developer.apple.com/documentation/swiftui/navigationstack">NavigationStack</a></li><li><a href="https://developer.apple.com/documentation/swiftui/navigationsplitview">NavigationSplitView</a></li></ul><p>跨课速查：<a href="../reference/glossary.html">术语与前端迁移</a> · <a href="../reference/swift-cheatsheet.html">Swift 语法速查</a> · <a href="../reference/concurrency-map.html">并发与版本地图</a> · <a href="../reference/swiftui-dataflow.html">SwiftUI 数据流</a> · <a href="../reference/native-checklist.html">原生工程检查表</a></p></section><section class="finish"><p>遇到不清楚的地方，直接向 Codex 提问：<strong>“第 30 课，我预测……，实际……，请帮我理解原因。”</strong></p><button data-complete="30" aria-pressed="false">我已独立完成练习</button> <button class="secondary" data-export>导出进度</button><p class="source-note">勾选只保存本浏览器的自报进度，不代表已通过能力验收；正式掌握情况写入 learning-records。</p></section><nav class="pager" aria-label="课程序列"><a href="0029-identity-lists-lifetime.html">← 身份与列表：状态为什么会保留或重置</a><a href="0031-forms-validation-focus.html">表单：验证、草稿与键盘焦点 →</a></nav></article></div></main><footer class="footer">为 Web 前端工程师设计 · 官方资料核对：2026-09-22 · 内容与示例可离线阅读；外部资料需联网 · 学习问题可以随时带回 Codex</footer></body></html>
